@@ -7,3 +7,5 @@ keys
 ntimed-tool
 timeservice
 trcs
+#IDE project settings
+.idea
