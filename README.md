@@ -1,3 +1,5 @@
+# This Fork is used to develop a simulation environment for G-SINC and is still WIP
+
 # Secure and Dependable Clock Synchronization on Next-Generation Networks
 
 Secure and dependable clock synchronization is an essential prerequisite for many industries with applications in finance, telecommunication, electric power production and distribution, or environmental monitoring.
