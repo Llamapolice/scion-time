@@ -1,19 +1,19 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-cd ~/scion
+cd $SCION_ROOT
 
 rm -rf gen*
 printf '#!/bin/bash\necho "0.0.0.0"' > tools/docker-ip
 sed -i "s/DEFAULT_NETWORK = \"127\.0\.0\.0\/8\"/DEFAULT_NETWORK = \"10\.0\.0\.0\/16\"/" tools/topology/net.py
-tools/topogen.py -c ~/scion-time/testnet/default4.topo
+tools/topogen.py -c $SCION_TIME_ROOT/testnet/default4.topo
 git checkout --quiet tools/topology/net.py
 git checkout --quiet tools/docker-ip
 
 export PYTHONPATH=python/:.
-~/scion-time/testnet/scion-topo-add-drkey.py
+$SCION_TIME_ROOT/testnet/scion-topo-add-drkey.py
 
-cd ~/scion-time/testnet/
+cd $SCION_TIME_ROOT/testnet/
 
 gen_delete_crypto () {
 	rm -rf gen/certs
@@ -21,8 +21,8 @@ gen_delete_crypto () {
 }
 
 gen_copy_crypto () {
-	cp -r ~/scion/gen/certs gen/
-	cp -r ~/scion/gen/trcs gen/
+	cp -r $SCION_ROOT/gen/certs gen/
+	cp -r $SCION_ROOT/gen/trcs gen/
 }
 
 isd_delete_crypto () {
@@ -30,7 +30,7 @@ isd_delete_crypto () {
 }
 
 isd_copy_crypto () {
-	cp -r ~/scion/gen/$1/trcs gen/$1/
+	cp -r $SCION_ROOT/gen/$1/trcs gen/$1/
 }
 
 as_delete_crypto () {
@@ -40,9 +40,9 @@ as_delete_crypto () {
 }
 
 as_copy_crypto () {
-	cp -r ~/scion/gen/$1/certs gen/$1/
-	cp -r ~/scion/gen/$1/crypto gen/$1/
-	cp -r ~/scion/gen/$1/keys gen/$1/
+	cp -r $SCION_ROOT/gen/$1/certs gen/$1/
+	cp -r $SCION_ROOT/gen/$1/crypto gen/$1/
+	cp -r $SCION_ROOT/gen/$1/keys gen/$1/
 }
 
 eh_delete_crypto () {
@@ -52,9 +52,9 @@ eh_delete_crypto () {
 }
 
 eh_copy_crypto () {
-	cp -r ~/scion/gen/$1/certs gen-eh/$1/
-	cp -r ~/scion/gen/$1/crypto gen-eh/$1/
-	cp -r ~/scion/gen/$1/keys gen-eh/$1/
+	cp -r $SCION_ROOT/gen/$1/certs gen-eh/$1/
+	cp -r $SCION_ROOT/gen/$1/crypto gen-eh/$1/
+	cp -r $SCION_ROOT/gen/$1/keys gen-eh/$1/
 }
 
 eh_delete_crypto ASff00_0_111
@@ -112,5 +112,5 @@ mkdir gen-certs
 rm -f gen/tls.crt
 rm -f gen/tls.key
 
-cd ~/scion-time/
+cd $SCION_TIME_ROOT/
 sh testnet/tls-gen-cert.sh

@@ -12,5 +12,5 @@ go version
 cd ~
 sudo rm -r scion-time
 git clone https://github.com/marcfrei/scion-time.git
-cd ~/scion-time
+cd $SCION_TIME_ROOT
 go build timeservice.go timeservicex.go

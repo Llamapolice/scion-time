@@ -7,7 +7,7 @@
 # 6. scion spao nts
 
 
-cd ~/scion-time
+cd $SCION_TIME_ROOT
 
 sudo killall timeservice
 sudo killall timeservice
@@ -19,7 +19,7 @@ do
     do 
         for i in $(seq 1 $c)
         do 
-            sudo USE_MOCK_KEYS=TRUE ./timeservice benchmark -config ~/scion-time/testnet/benchmark/config/ip_nonauth_benchmark.toml &
+            sudo USE_MOCK_KEYS=TRUE ./timeservice benchmark -config $SCION_TIME_ROOT/testnet/benchmark/config/ip_nonauth_benchmark.toml &
         done
         sleep 20
         sudo killall timeservice
@@ -40,7 +40,7 @@ do
     do  
         for i in $(seq 1 $c)
         do 
-            sudo USE_MOCK_KEYS=TRUE ./timeservice benchmark -config ~/scion-time/testnet/benchmark/config/ip_nts_benchmark.toml &
+            sudo USE_MOCK_KEYS=TRUE ./timeservice benchmark -config $SCION_TIME_ROOT/testnet/benchmark/config/ip_nts_benchmark.toml &
         done
         sleep 20
         sudo killall timeservice
@@ -61,7 +61,7 @@ do
     do  
         for i in $(seq 1 $c)
         do 
-            sudo USE_MOCK_KEYS=TRUE ./timeservice benchmark -config ~/scion-time/testnet/benchmark/config/scion_nonauth_benchmark.toml &
+            sudo USE_MOCK_KEYS=TRUE ./timeservice benchmark -config $SCION_TIME_ROOT/testnet/benchmark/config/scion_nonauth_benchmark.toml &
         done
         sleep 20
         sudo killall timeservice
@@ -82,7 +82,7 @@ do
     do  
         for i in $(seq 1 $c)
         do 
-            sudo USE_MOCK_KEYS=TRUE ./timeservice benchmark -config ~/scion-time/testnet/benchmark/config/scion_spao_benchmark.toml &
+            sudo USE_MOCK_KEYS=TRUE ./timeservice benchmark -config $SCION_TIME_ROOT/testnet/benchmark/config/scion_spao_benchmark.toml &
         done
         sleep 20
         sudo killall timeservice
@@ -103,7 +103,7 @@ do
     do  
         for i in $(seq 1 $c)
         do 
-            sudo USE_MOCK_KEYS=TRUE ./timeservice benchmark -config ~/scion-time/testnet/benchmark/config/scion_nts_benchmark.toml &
+            sudo USE_MOCK_KEYS=TRUE ./timeservice benchmark -config $SCION_TIME_ROOT/testnet/benchmark/config/scion_nts_benchmark.toml &
         done
         sleep 20
         sudo killall timeservice
@@ -124,7 +124,7 @@ do
     do  
         for i in $(seq 1 $c)
         do 
-            sudo USE_MOCK_KEYS=TRUE ./timeservice benchmark -config ~/scion-time/testnet/benchmark/config/scion_spao_nts_benchmark.toml &
+            sudo USE_MOCK_KEYS=TRUE ./timeservice benchmark -config $SCION_TIME_ROOT/testnet/benchmark/config/scion_spao_nts_benchmark.toml &
         done
         sleep 20
         sudo killall timeservice

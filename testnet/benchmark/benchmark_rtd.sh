@@ -7,7 +7,7 @@
 # 6. scion spao nts
 
 
-cd ~/scion-time
+cd $SCION_TIME_ROOT
 
 sudo killall timeservice
 sudo killall timeservice
@@ -17,7 +17,7 @@ echo "Nonauth IP"
 
 for iter in `seq 1 20`;
 do
-    sudo USE_MOCK_KEYS=TRUE ./timeservice benchmark -config ~/scion-time/testnet/benchmark/config/ip_nonauth_benchmark.toml
+    sudo USE_MOCK_KEYS=TRUE ./timeservice benchmark -config $SCION_TIME_ROOT/testnet/benchmark/config/ip_nonauth_benchmark.toml
     sleep 5
     sudo killall timeservice
     sudo killall timeservice
@@ -30,7 +30,7 @@ echo "NTS IP"
 
 for iter in `seq 1 20`;
 do
-    sudo USE_MOCK_KEYS=TRUE ./timeservice benchmark -config ~/scion-time/testnet/benchmark/config/ip_nts_benchmark.toml
+    sudo USE_MOCK_KEYS=TRUE ./timeservice benchmark -config $SCION_TIME_ROOT/testnet/benchmark/config/ip_nts_benchmark.toml
     sleep 5
     sudo killall timeservice
     sudo killall timeservice
@@ -43,7 +43,7 @@ echo "SCION nonauth"
 
 for iter in `seq 1 20`;
 do
-    sudo USE_MOCK_KEYS=TRUE ./timeservice benchmark -config ~/scion-time/testnet/benchmark/config/scion_nonauth_benchmark.toml
+    sudo USE_MOCK_KEYS=TRUE ./timeservice benchmark -config $SCION_TIME_ROOT/testnet/benchmark/config/scion_nonauth_benchmark.toml
     sleep 5
     sudo killall timeservice
     sudo killall timeservice
@@ -56,7 +56,7 @@ echo "SCION spao"
 
 for iter in `seq 1 20`;
 do
-    sudo USE_MOCK_KEYS=TRUE ./timeservice benchmark -config ~/scion-time/testnet/benchmark/config/scion_spao_benchmark.toml
+    sudo USE_MOCK_KEYS=TRUE ./timeservice benchmark -config $SCION_TIME_ROOT/testnet/benchmark/config/scion_spao_benchmark.toml
     sleep 5
     sudo killall timeservice
     sudo killall timeservice
@@ -69,7 +69,7 @@ echo "SCION nts"
 
 for iter in `seq 1 20`;
 do
-    sudo USE_MOCK_KEYS=TRUE ./timeservice benchmark -config ~/scion-time/testnet/benchmark/config/scion_nts_benchmark.toml
+    sudo USE_MOCK_KEYS=TRUE ./timeservice benchmark -config $SCION_TIME_ROOT/testnet/benchmark/config/scion_nts_benchmark.toml
     sleep 5
     sudo killall timeservice
     sudo killall timeservice
@@ -82,7 +82,7 @@ echo "SCION spao nts"
 
 for iter in `seq 1 20`;
 do
-    sudo USE_MOCK_KEYS=TRUE ./timeservice benchmark -config ~/scion-time/testnet/benchmark/config/scion_spao_nts_benchmark.toml
+    sudo USE_MOCK_KEYS=TRUE ./timeservice benchmark -config $SCION_TIME_ROOT/testnet/benchmark/config/scion_spao_nts_benchmark.toml
     sleep 5
     sudo killall timeservice
     sudo killall timeservice
