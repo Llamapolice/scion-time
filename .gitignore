@@ -7,5 +7,8 @@ keys
 ntimed-tool
 timeservice
 trcs
+
+testnet/logs
+testnet/gen-cache
 #IDE project settings
 .idea
