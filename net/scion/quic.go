@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/netip"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -14,6 +15,7 @@ import (
 	"github.com/google/gopacket"
 	"github.com/quic-go/quic-go"
 
+	"github.com/scionproto/scion/pkg/addr"
 	"github.com/scionproto/scion/pkg/slayers"
 	"github.com/scionproto/scion/pkg/snet"
 
@@ -86,14 +88,10 @@ func (c *baseConn) readPkt(b []byte) (int, udp.UDPAddr, snet.DataplanePath, net.
 		if err != nil {
 			continue // ignore unexpected address type
 		}
-		srcIPAddr, ok := srcAddr.(*net.IPAddr)
-		if !ok {
-			continue // ignore unexpected address type
-		}
 		remoteAddr := udp.UDPAddr{
 			IA: scionLayer.SrcIA,
 			Host: &net.UDPAddr{
-				IP:   srcIPAddr.IP,
+				IP:   srcAddr.IP().AsSlice(),
 				Port: int(udpLayer.SrcPort),
 			},
 		}
@@ -117,12 +115,20 @@ func (c *baseConn) writePkt(remoteAddr udp.UDPAddr, path snet.DataplanePath, nex
 
 	var scionLayer slayers.SCION
 	scionLayer.SrcIA = c.localAddr.IA
-	err = scionLayer.SetSrcAddr(&net.IPAddr{IP: c.localAddr.Host.IP})
+	srcAddrIP, ok := netip.AddrFromSlice(c.localAddr.Host.IP)
+	if !ok {
+		panic(errUnexpectedAddrType)
+	}
+	err = scionLayer.SetSrcAddr(addr.HostIP(srcAddrIP.Unmap()))
 	if err != nil {
 		panic(err)
 	}
 	scionLayer.DstIA = remoteAddr.IA
-	err = scionLayer.SetDstAddr(&net.IPAddr{IP: remoteAddr.Host.IP})
+	dstAddrIP, ok := netip.AddrFromSlice(remoteAddr.Host.IP)
+	if !ok {
+		panic(errUnexpectedAddrType)
+	}
+	err = scionLayer.SetDstAddr(addr.HostIP(dstAddrIP.Unmap()))
 	if err != nil {
 		panic(err)
 	}
@@ -341,18 +347,18 @@ func listenUDP(ctx context.Context, localAddr udp.UDPAddr) (net.PacketConn, erro
 }
 
 type quicListener struct {
-	quic.Listener
+	*quic.Listener
 	net.PacketConn
 }
 
-func (l quicListener) Close() error {
+func (l *quicListener) Close() error {
 	err := l.Listener.Close()
 	_ = l.PacketConn.Close()
 	return err
 }
 
 func ListenQUIC(ctx context.Context, localAddr udp.UDPAddr,
-	tlsCfg *tls.Config, quicCfg *quic.Config) (quic.Listener, error) {
+	tlsCfg *tls.Config, quicCfg *quic.Config) (*quic.Listener, error) {
 	conn, err := listenUDP(ctx, localAddr)
 	if err != nil {
 		return nil, err
@@ -363,12 +369,13 @@ func ListenQUIC(ctx context.Context, localAddr udp.UDPAddr,
 	if quicCfg.KeepAlivePeriod == 0 || quicCfg.KeepAlivePeriod > maxIdleTicks {
 		quicCfg.KeepAlivePeriod = maxIdleTicks * tickPeriod
 	}
-	qlistener, err := quic.Listen(conn, tlsCfg, quicCfg)
+	l, err := quic.Listen(conn, tlsCfg, quicCfg)
 	if err != nil {
 		conn.Close()
 		return nil, err
 	}
-	return quicListener{qlistener, conn}, nil
+	ql := &quicListener{l, conn}
+	return ql.Listener, nil
 }
 
 type clientConn struct {
@@ -452,7 +459,7 @@ func DialQUIC(ctx context.Context, localAddr, remoteAddr udp.UDPAddr, path snet.
 	if err != nil {
 		return nil, err
 	}
-	qconn, err := quic.DialContext(ctx, conn, remoteAddr, host, tlsCfg, quicCfg)
+	qconn, err := quic.Dial(ctx, conn, remoteAddr, tlsCfg, quicCfg)
 	if err != nil {
 		conn.Close()
 		return nil, err

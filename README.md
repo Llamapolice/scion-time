@@ -27,7 +27,7 @@ In Proceedings of the Symposium on Reliable Distributed Systems (SRDS) 2022.
 
 ## Running a simple IP-based server
 
-Reference platform: Ubuntu 22.04 LTS, Go 1.19.7; see [below](https://github.com/marcfrei/scion-time/edit/main/README.md#installing-prerequisites-for-a-scion-test-environment).
+Reference platform: Ubuntu 22.04 LTS, Go 1.21.2; see [below](https://github.com/marcfrei/scion-time/edit/main/README.md#installing-prerequisites-for-a-scion-test-environment).
 
 ```bash
 cd ~
@@ -61,7 +61,7 @@ $SCION_TIME_ROOT/timeservice tool -verbose -local 0-0,0.0.0.0 -remote 0-0,127.0.
 
 ## Installing prerequisites for a SCION test environment
 
-Reference platform: Ubuntu 22.04 LTS, Go 1.19.7
+Reference platform: Ubuntu 22.04 LTS, Go 1.21.2
 
 ```bash
 sudo apt-get update
@@ -73,10 +73,10 @@ On x86-64:
 
 ```bash
 sudo rm -rf /usr/local/go
-curl -LO https://golang.org/dl/go1.19.9.linux-amd64.tar.gz
-echo "e858173b489ec1ddbe2374894f52f53e748feed09dde61be5b4b4ba2d73ef34b go1.19.9.linux-amd64.tar.gz" | sha256sum -c
-sudo tar -C /usr/local -xzf go1.19.9.linux-amd64.tar.gz
-rm go1.19.9.linux-amd64.tar.gz
+curl -LO https://golang.org/dl/go1.21.2.linux-amd64.tar.gz
+echo "f5414a770e5e11c6e9674d4cd4dd1f4f630e176d1828d3427ea8ca4211eee90d go1.21.2.linux-amd64.tar.gz" | sha256sum -c
+sudo tar -C /usr/local -xzf go1.21.2.linux-amd64.tar.gz
+rm go1.21.2.linux-amd64.tar.gz
 echo >> .bash_profile
 echo 'export PATH=$PATH:/usr/local/go/bin' >> .bash_profile
 source ~/.bash_profile
@@ -87,10 +87,10 @@ On ARM64:
 
 ```bash
 sudo rm -rf /usr/local/go
-curl -LO https://golang.org/dl/go1.19.9.linux-arm64.tar.gz
-echo "b947e457be9d7b52a082c68e42b6939f9cc151f1ad5b3d8fd646ca3352f6f2f1 go1.19.9.linux-arm64.tar.gz" | sha256sum -c
-sudo tar -C /usr/local -xzf go1.19.9.linux-arm64.tar.gz
-rm go1.19.9.linux-arm64.tar.gz
+curl -LO https://golang.org/dl/go1.21.2.linux-arm64.tar.gz
+echo "23e208ca44a3cb46cd4308e48a27c714ddde9c8c34f2e4211dbca95b6d456554 go1.21.2.linux-arm64.tar.gz" | sha256sum -c
+sudo tar -C /usr/local -xzf go1.21.2.linux-arm64.tar.gz
+rm go1.21.2.linux-arm64.tar.gz
 echo >> .bash_profile
 echo 'export PATH=$PATH:/usr/local/go/bin' >> .bash_profile
 source ~/.bash_profile

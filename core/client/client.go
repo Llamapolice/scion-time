@@ -31,7 +31,8 @@ type ReferenceClockClient struct {
 }
 
 var (
-	errNoPaths = errors.New("failed to measure clock offset: no paths")
+	errNoPaths            = errors.New("failed to measure clock offset: no paths")
+	errUnexpectedAddrType = errors.New("unexpected address type")
 
 	ipMetrics    atomic.Pointer[ipClientMetrics]
 	scionMetrics atomic.Pointer[scionClientMetrics]
@@ -51,7 +52,7 @@ func MeasureClockOffsetIP(ctx context.Context, log *zap.Logger,
 	var off time.Duration
 	var nerr, n int
 	if ntpc.InterleavedMode {
-		n = 2
+		n = 3
 	} else {
 		n = 1
 	}
@@ -130,7 +131,7 @@ func MeasureClockOffsetSCION(ctx context.Context, log *zap.Logger,
 			)
 			if ntpc.InterleavedMode {
 				ntpc.ResetInterleavedMode()
-				n = 2
+				n = 3
 			} else {
 				n = 1
 			}

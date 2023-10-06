@@ -48,7 +48,7 @@ func (f *Fetcher) exchangeKeys() error {
 			return err
 		}
 
-		err = ExportKeys(conn.ConnectionState().TLS.ConnectionState, &f.data)
+		err = ExportKeys(conn.ConnectionState().TLS, &f.data)
 		if err != nil {
 			return err
 		}

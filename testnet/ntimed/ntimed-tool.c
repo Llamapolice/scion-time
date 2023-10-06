@@ -682,7 +682,7 @@ int main(int argc, char *argv[]) {
 		struct tm *gmt = gmtime(&t2sec);
 		assert(gmt != NULL);
 
-		printf("%04d-%02d-%02d'T'%02d:%02d:%02d'Z':%+.9lf, %+.9lf\n",
+		printf("%04d-%02d-%02dT%02d:%02d:%02dZ,%+.9lf,%+.9lf\n",
 			1900 + gmt->tm_year, 1 + gmt->tm_mon, gmt->tm_mday,
 			gmt->tm_hour, gmt->tm_min, gmt->tm_sec,
 			((TS_Diff(&rx_pkt->ntp_receive, &rx_pkt->ntp_origin)
