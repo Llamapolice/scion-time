@@ -49,7 +49,7 @@ func handleKeyExchangeQUIC(log *zap.Logger, conn quic.Connection, localPort int,
 		return err
 	}
 
-	err = ntske.ExportKeys(conn.ConnectionState().TLS.ConnectionState, &data)
+	err = ntske.ExportKeys(conn.ConnectionState().TLS, &data)
 	if err != nil {
 		log.Info("failed to export keys", zap.Error(err))
 		writeNTSKEErrorMsgQUIC(log, stream, ntske.ErrorCodeInternalServer)
@@ -81,7 +81,7 @@ func handleKeyExchangeQUIC(log *zap.Logger, conn quic.Connection, localPort int,
 	return nil
 }
 
-func runNTSKEServerQUIC(ctx context.Context, log *zap.Logger, listener quic.Listener, localPort int, provider *ntske.Provider) {
+func runNTSKEServerQUIC(ctx context.Context, log *zap.Logger, listener *quic.Listener, localPort int, provider *ntske.Provider) {
 	defer listener.Close()
 	for {
 		conn, err := ntske.AcceptQUICConn(context.Background(), listener)

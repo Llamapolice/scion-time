@@ -20,7 +20,7 @@ import (
 )
 
 // AcceptQUICConn accepts an incoming QUIC connection from a quic.Listener.
-func AcceptQUICConn(ctx context.Context, l quic.Listener) (quic.Connection, error) {
+func AcceptQUICConn(ctx context.Context, l *quic.Listener) (quic.Connection, error) {
 	return l.Accept(ctx)
 }
 
