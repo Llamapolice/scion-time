@@ -28,9 +28,14 @@ import (
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 
+	"example.com/scion-time/base/crypto"
+
+	"example.com/scion-time/simulation"
+
 	"example.com/scion-time/benchmark"
 
 	"example.com/scion-time/core/client"
+	"example.com/scion-time/core/cryptobase"
 	"example.com/scion-time/core/server"
 	"example.com/scion-time/core/sync"
 	"example.com/scion-time/core/timebase"
@@ -409,6 +414,9 @@ func runServer(configFile string) {
 	lclk := &clock.SystemClock{Log: log}
 	timebase.RegisterClock(lclk)
 
+	lcrypt := &crypto.SafeCrypto{}
+	cryptobase.RegisterCrypto(lcrypt)
+
 	if len(refClocks) != 0 {
 		sync.SyncToRefClocks(log, lclk)
 		go sync.RunLocalClockSync(log, lclk)
@@ -446,6 +454,9 @@ func runRelay(configFile string) {
 	lclk := &clock.SystemClock{Log: log}
 	timebase.RegisterClock(lclk)
 
+	lcrypt := &crypto.SafeCrypto{}
+	cryptobase.RegisterCrypto(lcrypt)
+
 	if len(refClocks) != 0 {
 		sync.SyncToRefClocks(log, lclk)
 		go sync.RunLocalClockSync(log, lclk)
@@ -482,6 +493,9 @@ func runClient(configFile string) {
 	lclk := &clock.SystemClock{Log: log}
 	timebase.RegisterClock(lclk)
 
+	lcrypt := &crypto.SafeCrypto{}
+	cryptobase.RegisterCrypto(lcrypt)
+
 	scionClocksAvailable := false
 	for _, c := range refClocks {
 		_, ok := c.(*ntpReferenceClockSCION)
@@ -514,6 +528,9 @@ func runIPTool(localAddr, remoteAddr *snet.UDPAddr,
 	lclk := &clock.SystemClock{Log: log}
 	timebase.RegisterClock(lclk)
 
+	lcrypt := &crypto.SafeCrypto{}
+	cryptobase.RegisterCrypto(lcrypt)
+
 	laddr := localAddr.Host
 	raddr := remoteAddr.Host
 	c := &client.IPClient{
@@ -536,6 +553,9 @@ func runSCIONTool(daemonAddr, dispatcherMode string, localAddr, remoteAddr *snet
 
 	lclk := &clock.SystemClock{Log: log}
 	timebase.RegisterClock(lclk)
+
+	lcrypt := &crypto.SafeCrypto{}
+	cryptobase.RegisterCrypto(lcrypt)
 
 	if dispatcherMode == dispatcherModeInternal {
 		server.StartSCIONDispatcher(ctx, log, snet.CopyUDPAddr(localAddr.Host))
@@ -606,13 +626,29 @@ func runBenchmark(configFile string) {
 func runIPBenchmark(localAddr, remoteAddr *snet.UDPAddr, authModes []string, ntskeServer string, log *zap.Logger) {
 	lclk := &clock.SystemClock{Log: zap.NewNop()}
 	timebase.RegisterClock(lclk)
+
+	lcrypt := &crypto.SafeCrypto{}
+	cryptobase.RegisterCrypto(lcrypt)
+
 	benchmark.RunIPBenchmark(localAddr.Host, remoteAddr.Host, authModes, ntskeServer, log)
 }
 
 func runSCIONBenchmark(daemonAddr string, localAddr, remoteAddr *snet.UDPAddr, authModes []string, ntskeServer string, log *zap.Logger) {
 	lclk := &clock.SystemClock{Log: zap.NewNop()}
 	timebase.RegisterClock(lclk)
+
+	lcrypt := &crypto.SafeCrypto{}
+	cryptobase.RegisterCrypto(lcrypt)
+
 	benchmark.RunSCIONBenchmark(daemonAddr, localAddr, remoteAddr, authModes, ntskeServer, log)
+}
+
+func runSimulation(configFile string) {
+	lclk := &simulation.SimulationClock{}
+	timebase.RegisterClock(lclk)
+
+	lcrypt := &simulation.SimulationCrypto{}
+	cryptobase.RegisterCrypto(lcrypt)
 }
 
 func runDRKeyDemo(daemonAddr string, serverMode bool, serverAddr, clientAddr *snet.UDPAddr) {

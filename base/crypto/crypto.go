@@ -11,7 +11,26 @@ import (
 	"crypto/rand"
 	"encoding/binary"
 	"math"
+
+	"example.com/scion-time/base/cryptobase"
 )
+
+// SafeCrypto provides random number generation and utilities based on crypto/rand, safe to be used in prod
+type SafeCrypto struct {
+	// TODO: do we need anything here?
+}
+
+// RandIntn enables the use of the SafeCrypto struct as an "inheritor" of [cryptobase.CryptoProvider]
+func (s *SafeCrypto) RandIntn(ctx context.Context, n int) (int, error) {
+	return RandIntn(ctx, n)
+}
+
+// Sample enables the use of the SafeCrypto struct as an "inheritor" of [cryptobase.CryptoProvider]
+func (s *SafeCrypto) Sample(ctx context.Context, k, n int, pick func(dst int, src int)) (int, error) {
+	return Sample(ctx, k, n, pick)
+}
+
+var _ cryptobase.CryptoProvider = (*SafeCrypto)(nil)
 
 func randInt31(ctx context.Context, n int) (int, error) {
 	if n < 2 {
