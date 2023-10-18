@@ -7,6 +7,8 @@ import (
 	"example.com/scion-time/base/cryptobase"
 )
 
+// TODO: structure copied from timebase
+
 var lcrypt atomic.Value
 
 func RegisterCrypto(c cryptobase.CryptoProvider) {
