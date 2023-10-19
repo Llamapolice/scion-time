@@ -7,7 +7,11 @@ import (
 )
 
 type SimulationClock struct {
-	// TODO: some logging function here
+	seed int64 // still TODO if this is needed
+}
+
+func NewSimulationClock(seed int64) *SimulationClock {
+	return &SimulationClock{seed: seed}
 }
 
 func (c *SimulationClock) Epoch() uint64 {

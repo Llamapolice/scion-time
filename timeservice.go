@@ -661,11 +661,11 @@ func runSCIONBenchmark(daemonAddr string, localAddr, remoteAddr *snet.UDPAddr, a
 	benchmark.RunSCIONBenchmark(daemonAddr, localAddr, remoteAddr, authModes, ntskeServer, log)
 }
 
-func runSimulation(configFile string) {
-	lclk := &simulation.SimulationClock{}
+func runSimulation(seed int64) {
+	lclk := simulation.NewSimulationClock(seed)
 	timebase.RegisterClock(lclk)
 
-	lcrypt := &simulation.SimulationCrypto{}
+	lcrypt := simulation.NewSimCrypto(seed)
 	cryptobase.RegisterCrypto(lcrypt)
 }
 
