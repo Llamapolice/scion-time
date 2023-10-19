@@ -2,21 +2,46 @@ package simulation
 
 import (
 	"context"
+	"math/rand"
 
 	"example.com/scion-time/base/cryptobase"
 )
 
-type SimulationCrypto struct {
+type SimCrypto struct {
+	seededRand rand.Rand
 }
 
-func (s *SimulationCrypto) RandIntn(ctx context.Context, n int) (int, error) {
-	//TODO implement me
-	panic("implement me")
+func NewSimCrypto(seed int64) *SimCrypto {
+	return &SimCrypto{seededRand: *rand.New(rand.NewSource(seed))}
 }
 
-func (s *SimulationCrypto) Sample(ctx context.Context, k, n int, pick func(dst int, src int)) (int, error) {
-	//TODO implement me
-	panic("implement me")
+func (s *SimCrypto) RandIntn(ctx context.Context, n int) (int, error) {
+	if n <= 0 {
+		panic("invalid argument to RandIntn: n must be greater than 0")
+	}
+	return s.seededRand.Intn(n), nil
 }
 
-var _ cryptobase.CryptoProvider = (*SimulationCrypto)(nil)
+func (s *SimCrypto) Sample(ctx context.Context, k, n int, pick func(dst int, src int)) (int, error) { // basically copied from base/crypto
+	if k < 0 {
+		panic("invalid argument to Sample: k must be non-negative")
+	}
+	if n < 0 {
+		panic("invalid argument to Sample: n must be non-negative")
+	}
+	if n < k {
+		k = n
+	}
+	for i := 0; i != k; i++ {
+		pick(i, i)
+	}
+	for i := k; i != n; i++ {
+		j := s.seededRand.Intn(i + 1)
+		if j < k {
+			pick(j, i)
+		}
+	}
+	return k, nil
+}
+
+var _ cryptobase.CryptoProvider = (*SimCrypto)(nil)
