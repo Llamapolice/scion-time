@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"crypto/subtle"
+	netprovider "example.com/scion-time/base/netbase"
 	"example.com/scion-time/core/netbase"
 	"net"
 	"net/netip"
@@ -70,7 +71,7 @@ func newSCIONServerMetrics() *scionServerMetrics {
 }
 
 func runSCIONServer(ctx context.Context, log *zap.Logger, mtrcs *scionServerMetrics,
-	conn *net.UDPConn, localHostIface string, localHostPort int, dscp uint8,
+	conn netprovider.Connection, localHostIface string, localHostPort int, dscp uint8,
 	fetcher *scion.Fetcher, provider *ntske.Provider) {
 	defer conn.Close()
 	err := netbase.EnableTimestamping(conn, localHostIface)
@@ -499,7 +500,7 @@ func StartSCIONServer(ctx context.Context, log *zap.Logger,
 			if err != nil {
 				log.Fatal("failed to listen for packets", zap.Error(err))
 			}
-			go runSCIONServer(ctx, log, mtrcs, conn.(*net.UDPConn), localHost.Zone, localHostPort, dscp, fetcher, provider)
+			go runSCIONServer(ctx, log, mtrcs, conn.(netprovider.Connection), localHost.Zone, localHostPort, dscp, fetcher, provider)
 		}
 	}
 }

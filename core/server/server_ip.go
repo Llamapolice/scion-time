@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"example.com/scion-time/base/netbase"
 	"example.com/scion-time/core/netbase"
 	"net"
 	"strconv"
@@ -51,7 +52,7 @@ func newIPServerMetrics() *ipServerMetrics {
 }
 
 func runIPServer(log *zap.Logger, mtrcs *ipServerMetrics,
-	conn *net.UDPConn, iface string, dscp uint8, provider *ntske.Provider) {
+	conn netprovider.Connection, iface string, dscp uint8, provider *ntske.Provider) {
 	defer conn.Close()
 	err := netbase.EnableTimestamping(conn, iface)
 	if err != nil {
@@ -226,7 +227,7 @@ func StartIPServer(ctx context.Context, log *zap.Logger,
 			if err != nil {
 				log.Fatal("failed to listen for packets", zap.Error(err))
 			}
-			go runIPServer(log, mtrcs, conn.(*net.UDPConn), localHost.Zone, dscp, provider)
+			go runIPServer(log, mtrcs, conn.(netprovider.Connection), localHost.Zone, dscp, provider)
 		}
 	}
 }

@@ -11,20 +11,20 @@ type UDPConnector struct {
 	// Nothing yet
 }
 
-func (U *UDPConnector) ListenUDP(network string, laddr *net.UDPAddr) (*net.UDPConn, error) {
+func (U *UDPConnector) ListenUDP(network string, laddr *net.UDPAddr) (netprovider.Connection, error) {
 	return net.ListenUDP(network, laddr)
 }
 
-func (U *UDPConnector) EnableTimestamping(n *net.UDPConn, localHostIface string) error {
-	return udp.EnableTimestamping(n, localHostIface)
+func (U *UDPConnector) EnableTimestamping(n netprovider.Connection, localHostIface string) error {
+	return udp.EnableTimestamping(n.(*net.UDPConn), localHostIface)
 }
 
-func (U *UDPConnector) SetDSCP(n *net.UDPConn, dscp uint8) error {
-	return udp.SetDSCP(n, dscp)
+func (U *UDPConnector) SetDSCP(n netprovider.Connection, dscp uint8) error {
+	return udp.SetDSCP(n.(*net.UDPConn), dscp)
 }
 
-func (U *UDPConnector) ReadTXTimestamp(n *net.UDPConn) (time.Time, uint32, error) {
-	return udp.ReadTXTimestamp(n)
+func (U *UDPConnector) ReadTXTimestamp(n netprovider.Connection) (time.Time, uint32, error) {
+	return udp.ReadTXTimestamp(n.(*net.UDPConn))
 }
 
-var _ netbase.ConnProvider = (*UDPConnector)(nil)
+var _ netprovider.ConnProvider = (*UDPConnector)(nil)

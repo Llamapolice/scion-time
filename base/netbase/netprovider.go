@@ -1,4 +1,4 @@
-package netbase
+package netprovider
 
 import (
 	"net"
@@ -19,9 +19,11 @@ type Connection interface {
 	LocalAddr() net.Addr // based on core/client/client_scion.go:138, maybe change it to straight up give out the port?
 }
 
+var _ Connection = (*net.UDPConn)(nil)
+
 type ConnProvider interface {
-	ListenUDP(network string, laddr *net.UDPAddr) (*net.UDPConn, error)
-	EnableTimestamping(n *net.UDPConn, localHostIface string) error
-	SetDSCP(n *net.UDPConn, dscp uint8) error
-	ReadTXTimestamp(n *net.UDPConn) (time.Time, uint32, error)
+	ListenUDP(network string, laddr *net.UDPAddr) (Connection, error)
+	EnableTimestamping(n Connection, localHostIface string) error
+	SetDSCP(n Connection, dscp uint8) error
+	ReadTXTimestamp(n Connection) (time.Time, uint32, error)
 }

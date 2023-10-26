@@ -11,7 +11,7 @@ import (
 
 var lnetprovider atomic.Value
 
-func RegisterNetProvider(n netbase.ConnProvider) {
+func RegisterNetProvider(n netprovider.ConnProvider) {
 	if n == nil {
 		panic("net provider must not be nil")
 	}
@@ -20,26 +20,26 @@ func RegisterNetProvider(n netbase.ConnProvider) {
 	}
 }
 
-func getNetProvider() netbase.ConnProvider {
-	c := lnetprovider.Load().(netbase.ConnProvider)
+func getNetProvider() netprovider.ConnProvider {
+	c := lnetprovider.Load().(netprovider.ConnProvider)
 	if c == nil {
 		panic("no net provider registered")
 	}
 	return c
 }
 
-func ListenUDP(network string, laddr *net.UDPAddr) (*net.UDPConn, error) {
+func ListenUDP(network string, laddr *net.UDPAddr) (netprovider.Connection, error) {
 	return getNetProvider().ListenUDP(network, laddr)
 }
 
-func EnableTimestamping(n *net.UDPConn, localHostIface string) error {
+func EnableTimestamping(n netprovider.Connection, localHostIface string) error {
 	return getNetProvider().EnableTimestamping(n, localHostIface)
 }
 
-func SetDSCP(n *net.UDPConn, dscp uint8) error {
+func SetDSCP(n netprovider.Connection, dscp uint8) error {
 	return getNetProvider().SetDSCP(n, dscp)
 }
 
-func ReadTXTimestamp(n *net.UDPConn) (time.Time, uint32, error) {
+func ReadTXTimestamp(n netprovider.Connection) (time.Time, uint32, error) {
 	return getNetProvider().ReadTXTimestamp(n)
 }
