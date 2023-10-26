@@ -2,7 +2,7 @@ package netbase
 
 import (
 	"example.com/scion-time/base/netbase"
-	"example.com/scion-time/net/udp"
+	"net"
 	"sync/atomic"
 	"time"
 )
@@ -28,22 +28,18 @@ func getNetProvider() netbase.ConnProvider {
 	return c
 }
 
-func ListenUDP(network string, laddr *udp.UDPAddr) (*netbase.ConnProvider, error) {
-	panic("ListenUDP not implemented yet")
+func ListenUDP(network string, laddr *net.UDPAddr) (*net.UDPConn, error) {
+	return getNetProvider().ListenUDP(network, laddr)
 }
 
-func EnableTimestamping(n *netbase.ConnProvider, localHostIface string) error {
-	panic("EnableTimestamping not yet implemented")
+func EnableTimestamping(n *net.UDPConn, localHostIface string) error {
+	return getNetProvider().EnableTimestamping(n, localHostIface)
 }
 
-func SetDSCP(n *netbase.ConnProvider, dscp uint8) error {
-	panic("SetDSCP not yet implemented")
+func SetDSCP(n *net.UDPConn, dscp uint8) error {
+	return getNetProvider().SetDSCP(n, dscp)
 }
 
-func ReadTXTimestamp(n *netbase.ConnProvider) (time.Time, uint32, error) {
-	panic("ReadTXTimestamp not implemented yet")
-}
-
-func Close() error {
-	return getNetProvider().Close()
+func ReadTXTimestamp(n *net.UDPConn) (time.Time, uint32, error) {
+	return getNetProvider().ReadTXTimestamp(n)
 }

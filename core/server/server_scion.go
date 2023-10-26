@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"crypto/subtle"
+	"example.com/scion-time/core/netbase"
 	"net"
 	"net/netip"
 	"strconv"
@@ -72,11 +73,11 @@ func runSCIONServer(ctx context.Context, log *zap.Logger, mtrcs *scionServerMetr
 	conn *net.UDPConn, localHostIface string, localHostPort int, dscp uint8,
 	fetcher *scion.Fetcher, provider *ntske.Provider) {
 	defer conn.Close()
-	err := udp.EnableTimestamping(conn, localHostIface)
+	err := netbase.EnableTimestamping(conn, localHostIface)
 	if err != nil {
 		log.Error("failed to enable timestamping", zap.Error(err))
 	}
-	err = udp.SetDSCP(conn, dscp)
+	err = netbase.SetDSCP(conn, dscp)
 	if err != nil {
 		log.Info("failed to set DSCP", zap.Error(err))
 	}
@@ -215,7 +216,7 @@ func runSCIONServer(ctx context.Context, log *zap.Logger, mtrcs *scionServerMetr
 				log.Error("failed to write packet", zap.Error(err))
 				continue
 			}
-			_, id, err := udp.ReadTXTimestamp(conn)
+			_, id, err := netbase.ReadTXTimestamp(conn)
 			if err != nil {
 				log.Error("failed to read packet tx timestamp", zap.Error(err))
 			} else if id != txID {
@@ -449,7 +450,7 @@ func runSCIONServer(ctx context.Context, log *zap.Logger, mtrcs *scionServerMetr
 				log.Error("failed to write packet", zap.Error(err))
 				continue
 			}
-			txt1, id, err := udp.ReadTXTimestamp(conn)
+			txt1, id, err := netbase.ReadTXTimestamp(conn)
 			if err != nil {
 				txt1 = txt0
 				log.Error("failed to read packet tx timestamp", zap.Error(err))
@@ -485,7 +486,7 @@ func StartSCIONServer(ctx context.Context, log *zap.Logger,
 
 	if scionServerNumGoroutine == 1 {
 		fetcher := scion.NewFetcher(scion.NewDaemonConnector(ctx, daemonAddr))
-		conn, err := net.ListenUDP("udp", localHost)
+		conn, err := netbase.ListenUDP("udp", localHost)
 		if err != nil {
 			log.Fatal("failed to listen for packets", zap.Error(err))
 		}
@@ -518,7 +519,7 @@ func StartSCIONDispatcher(ctx context.Context, log *zap.Logger,
 
 	mtrcs := newSCIONServerMetrics()
 
-	conn, err := net.ListenUDP("udp", localHost)
+	conn, err := netbase.ListenUDP("udp", localHost)
 	if err != nil {
 		log.Fatal("failed to listen for packets", zap.Error(err))
 	}

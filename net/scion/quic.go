@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
+	"example.com/scion-time/core/netbase"
 	"fmt"
 	"net"
 	"net/netip"
@@ -328,7 +329,7 @@ func listenUDP(ctx context.Context, localAddr udp.UDPAddr) (net.PacketConn, erro
 	if localAddr.Host.Port == EndhostPort {
 		return nil, errInvalidListenerPort
 	}
-	raw, err := net.ListenUDP("udp", localAddr.Host)
+	raw, err := netbase.ListenUDP("udp", localAddr.Host)
 	if err != nil {
 		return nil, err
 	}
@@ -418,7 +419,7 @@ func (c *clientConn) Close() error {
 }
 
 func dialUDP(ctx context.Context, localAddr, remoteAddr udp.UDPAddr, path snet.Path) (net.PacketConn, error) {
-	raw, err := net.ListenUDP("udp", &net.UDPAddr{IP: localAddr.Host.IP})
+	raw, err := netbase.ListenUDP("udp", &net.UDPAddr{IP: localAddr.Host.IP})
 	if err != nil {
 		return nil, err
 	}
