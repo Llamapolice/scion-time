@@ -346,17 +346,6 @@ func listenUDP(ctx context.Context, localAddr udp.UDPAddr) (net.PacketConn, erro
 	return conn, nil
 }
 
-type quicListener struct {
-	*quic.Listener
-	net.PacketConn
-}
-
-func (l *quicListener) Close() error {
-	err := l.Listener.Close()
-	_ = l.PacketConn.Close()
-	return err
-}
-
 func ListenQUIC(ctx context.Context, localAddr udp.UDPAddr,
 	tlsCfg *tls.Config, quicCfg *quic.Config) (*quic.Listener, error) {
 	conn, err := listenUDP(ctx, localAddr)
@@ -374,8 +363,7 @@ func ListenQUIC(ctx context.Context, localAddr udp.UDPAddr,
 		conn.Close()
 		return nil, err
 	}
-	ql := &quicListener{l, conn}
-	return ql.Listener, nil
+	return l, nil
 }
 
 type clientConn struct {
