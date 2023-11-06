@@ -1,8 +1,8 @@
 package netbase
 
 import (
-	"example.com/scion-time/base/netbase"
-	"example.com/scion-time/net/udp"
+	"example.com/scion-time/base/netprovider"
+	"net"
 	"sync/atomic"
 	"time"
 )
@@ -11,7 +11,7 @@ import (
 
 var lnetprovider atomic.Value
 
-func RegisterNetProvider(n netbase.ConnProvider) {
+func RegisterNetProvider(n netprovider.ConnProvider) {
 	if n == nil {
 		panic("net provider must not be nil")
 	}
@@ -20,30 +20,26 @@ func RegisterNetProvider(n netbase.ConnProvider) {
 	}
 }
 
-func getNetProvider() netbase.ConnProvider {
-	c := lnetprovider.Load().(netbase.ConnProvider)
+func getNetProvider() netprovider.ConnProvider {
+	c := lnetprovider.Load().(netprovider.ConnProvider)
 	if c == nil {
 		panic("no net provider registered")
 	}
 	return c
 }
 
-func ListenUDP(network string, laddr *udp.UDPAddr) (*netbase.ConnProvider, error) {
-	panic("ListenUDP not implemented yet")
+func ListenUDP(network string, laddr *net.UDPAddr) (netprovider.Connection, error) {
+	return getNetProvider().ListenUDP(network, laddr)
 }
 
-func EnableTimestamping(n *netbase.ConnProvider, localHostIface string) error {
-	panic("EnableTimestamping not yet implemented")
+func EnableTimestamping(n netprovider.Connection, localHostIface string) error {
+	return getNetProvider().EnableTimestamping(n, localHostIface)
 }
 
-func SetDSCP(n *netbase.ConnProvider, dscp uint8) error {
-	panic("SetDSCP not yet implemented")
+func SetDSCP(n netprovider.Connection, dscp uint8) error {
+	return getNetProvider().SetDSCP(n, dscp)
 }
 
-func ReadTXTimestamp(n *netbase.ConnProvider) (time.Time, uint32, error) {
-	panic("ReadTXTimestamp not implemented yet")
-}
-
-func Close() error {
-	return getNetProvider().Close()
+func ReadTXTimestamp(n netprovider.Connection) (time.Time, uint32, error) {
+	return getNetProvider().ReadTXTimestamp(n)
 }

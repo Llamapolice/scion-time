@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"crypto/subtle"
+	"example.com/scion-time/core/netbase"
 	"net"
 	"net/netip"
 	"time"
@@ -114,7 +115,7 @@ func (c *SCIONClient) measureClockOffsetSCION(ctx context.Context, log *zap.Logg
 	}
 	var authKey []byte
 
-	conn, err := net.ListenUDP("udp", &net.UDPAddr{IP: localAddr.Host.IP})
+	conn, err := netbase.ListenUDP("udp", &net.UDPAddr{IP: localAddr.Host.IP})
 	if err != nil {
 		return offset, weight, err
 	}
@@ -126,11 +127,11 @@ func (c *SCIONClient) measureClockOffsetSCION(ctx context.Context, log *zap.Logg
 			return offset, weight, err
 		}
 	}
-	err = udp.EnableTimestamping(conn, localAddr.Host.Zone)
+	err = netbase.EnableTimestamping(conn, localAddr.Host.Zone)
 	if err != nil {
 		log.Error("failed to enable timestamping", zap.Error(err))
 	}
-	err = udp.SetDSCP(conn, c.DSCP)
+	err = netbase.SetDSCP(conn, c.DSCP)
 	if err != nil {
 		log.Info("failed to set DSCP", zap.Error(err))
 	}
@@ -300,7 +301,7 @@ func (c *SCIONClient) measureClockOffsetSCION(ctx context.Context, log *zap.Logg
 	if n != len(buffer.Bytes()) {
 		return offset, weight, errWrite
 	}
-	cTxTime1, id, err := udp.ReadTXTimestamp(conn)
+	cTxTime1, id, err := netbase.ReadTXTimestamp(conn)
 	if err != nil || id != 0 {
 		cTxTime1 = timebase.Now()
 		log.Error("failed to read packet tx timestamp", zap.Error(err))

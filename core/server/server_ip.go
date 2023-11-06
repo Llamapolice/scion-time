@@ -2,6 +2,8 @@ package server
 
 import (
 	"context"
+	"example.com/scion-time/base/netprovider"
+	"example.com/scion-time/core/netbase"
 	"net"
 	"strconv"
 	"time"
@@ -50,13 +52,13 @@ func newIPServerMetrics() *ipServerMetrics {
 }
 
 func runIPServer(log *zap.Logger, mtrcs *ipServerMetrics,
-	conn *net.UDPConn, iface string, dscp uint8, provider *ntske.Provider) {
+	conn netprovider.Connection, iface string, dscp uint8, provider *ntske.Provider) {
 	defer conn.Close()
-	err := udp.EnableTimestamping(conn, iface)
+	err := netbase.EnableTimestamping(conn, iface)
 	if err != nil {
 		log.Error("failed to enable timestamping", zap.Error(err))
 	}
-	err = udp.SetDSCP(conn, dscp)
+	err = netbase.SetDSCP(conn, dscp)
 	if err != nil {
 		log.Info("failed to set DSCP", zap.Error(err))
 	}
@@ -186,7 +188,7 @@ func runIPServer(log *zap.Logger, mtrcs *ipServerMetrics,
 			log.Error("failed to write packet", zap.Error(err))
 			continue
 		}
-		txt1, id, err := udp.ReadTXTimestamp(conn)
+		txt1, id, err := netbase.ReadTXTimestamp(conn)
 		if err != nil {
 			txt1 = txt0
 			log.Error("failed to read packet tx timestamp", zap.Error(err))
@@ -213,7 +215,7 @@ func StartIPServer(ctx context.Context, log *zap.Logger,
 	mtrcs := newIPServerMetrics()
 
 	if ipServerNumGoroutine == 1 {
-		conn, err := net.ListenUDP("udp", localHost)
+		conn, err := netbase.ListenUDP("udp", localHost)
 		if err != nil {
 			log.Fatal("failed to listen for packets", zap.Error(err))
 		}
@@ -225,7 +227,7 @@ func StartIPServer(ctx context.Context, log *zap.Logger,
 			if err != nil {
 				log.Fatal("failed to listen for packets", zap.Error(err))
 			}
-			go runIPServer(log, mtrcs, conn.(*net.UDPConn), localHost.Zone, dscp, provider)
+			go runIPServer(log, mtrcs, conn.(netprovider.Connection), localHost.Zone, dscp, provider)
 		}
 	}
 }

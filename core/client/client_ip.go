@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"example.com/scion-time/core/netbase"
 	"net"
 	"net/netip"
 	"time"
@@ -87,7 +88,7 @@ func (c *IPClient) ResetInterleavedMode() {
 func (c *IPClient) measureClockOffsetIP(ctx context.Context, log *zap.Logger, mtrcs *ipClientMetrics,
 	localAddr, remoteAddr *net.UDPAddr) (
 	offset time.Duration, weight float64, err error) {
-	conn, err := net.ListenUDP("udp", &net.UDPAddr{IP: localAddr.IP})
+	conn, err := netbase.ListenUDP("udp", &net.UDPAddr{IP: localAddr.IP})
 	if err != nil {
 		return offset, weight, err
 	}
@@ -99,11 +100,11 @@ func (c *IPClient) measureClockOffsetIP(ctx context.Context, log *zap.Logger, mt
 			return offset, weight, err
 		}
 	}
-	err = udp.EnableTimestamping(conn, localAddr.Zone)
+	err = netbase.EnableTimestamping(conn, localAddr.Zone)
 	if err != nil {
 		log.Error("failed to enable timestamping", zap.Error(err))
 	}
-	err = udp.SetDSCP(conn, c.DSCP)
+	err = netbase.SetDSCP(conn, c.DSCP)
 	if err != nil {
 		log.Info("failed to set DSCP", zap.Error(err))
 	}
@@ -158,7 +159,7 @@ func (c *IPClient) measureClockOffsetIP(ctx context.Context, log *zap.Logger, mt
 	if n != len(buf) {
 		return offset, weight, errWrite
 	}
-	cTxTime1, id, err := udp.ReadTXTimestamp(conn)
+	cTxTime1, id, err := netbase.ReadTXTimestamp(conn)
 	if err != nil || id != 0 {
 		cTxTime1 = timebase.Now()
 		log.Error("failed to read packet tx timestamp", zap.Error(err))
