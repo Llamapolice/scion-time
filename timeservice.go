@@ -430,10 +430,10 @@ func runServer(configFile string) {
 	lclk := &clock.SystemClock{Log: log}
 	timebase.RegisterClock(lclk)
 
-	lcrypt := &crypto.SafeCrypto{}
+	lcrypt := &crypto.SafeCrypto{Log: log}
 	cryptobase.RegisterCrypto(lcrypt)
 
-	lnet := &networking.UDPConnector{}
+	lnet := &networking.UDPConnector{Log: log}
 	netbase.RegisterNetProvider(lnet)
 
 	if len(refClocks) != 0 {
@@ -474,10 +474,10 @@ func runRelay(configFile string) {
 	lclk := &clock.SystemClock{Log: log}
 	timebase.RegisterClock(lclk)
 
-	lcrypt := &crypto.SafeCrypto{}
+	lcrypt := &crypto.SafeCrypto{Log: log}
 	cryptobase.RegisterCrypto(lcrypt)
 
-	lnet := &networking.UDPConnector{}
+	lnet := &networking.UDPConnector{Log: log}
 	netbase.RegisterNetProvider(lnet)
 
 	if len(refClocks) != 0 {
@@ -517,10 +517,10 @@ func runClient(configFile string) {
 	lclk := &clock.SystemClock{Log: log}
 	timebase.RegisterClock(lclk)
 
-	lcrypt := &crypto.SafeCrypto{}
+	lcrypt := &crypto.SafeCrypto{Log: log}
 	cryptobase.RegisterCrypto(lcrypt)
 
-	lnet := &networking.UDPConnector{}
+	lnet := &networking.UDPConnector{Log: log}
 	netbase.RegisterNetProvider(lnet)
 
 	scionClocksAvailable := false
@@ -555,10 +555,10 @@ func runIPTool(localAddr, remoteAddr *snet.UDPAddr, dscp uint8,
 	lclk := &clock.SystemClock{Log: log}
 	timebase.RegisterClock(lclk)
 
-	lcrypt := &crypto.SafeCrypto{}
+	lcrypt := &crypto.SafeCrypto{Log: log}
 	cryptobase.RegisterCrypto(lcrypt)
 
-	lnet := &networking.UDPConnector{}
+	lnet := &networking.UDPConnector{Log: log}
 	netbase.RegisterNetProvider(lnet)
 
 	laddr := localAddr.Host
@@ -585,10 +585,10 @@ func runSCIONTool(daemonAddr, dispatcherMode string, localAddr, remoteAddr *snet
 	lclk := &clock.SystemClock{Log: log}
 	timebase.RegisterClock(lclk)
 
-	lcrypt := &crypto.SafeCrypto{}
+	lcrypt := &crypto.SafeCrypto{Log: log}
 	cryptobase.RegisterCrypto(lcrypt)
 
-	lnet := &networking.UDPConnector{}
+	lnet := &networking.UDPConnector{Log: log}
 	netbase.RegisterNetProvider(lnet)
 
 	if dispatcherMode == dispatcherModeInternal {
@@ -662,10 +662,10 @@ func runIPBenchmark(localAddr, remoteAddr *snet.UDPAddr, authModes []string, nts
 	lclk := &clock.SystemClock{Log: zap.NewNop()}
 	timebase.RegisterClock(lclk)
 
-	lcrypt := &crypto.SafeCrypto{}
+	lcrypt := &crypto.SafeCrypto{Log: zap.NewNop()}
 	cryptobase.RegisterCrypto(lcrypt)
 
-	lnet := &networking.UDPConnector{}
+	lnet := &networking.UDPConnector{Log: zap.NewNop()}
 	netbase.RegisterNetProvider(lnet)
 
 	benchmark.RunIPBenchmark(localAddr.Host, remoteAddr.Host, authModes, ntskeServer, log)
@@ -675,23 +675,23 @@ func runSCIONBenchmark(daemonAddr string, localAddr, remoteAddr *snet.UDPAddr, a
 	lclk := &clock.SystemClock{Log: zap.NewNop()}
 	timebase.RegisterClock(lclk)
 
-	lcrypt := &crypto.SafeCrypto{}
+	lcrypt := &crypto.SafeCrypto{Log: zap.NewNop()}
 	cryptobase.RegisterCrypto(lcrypt)
 
-	lnet := &networking.UDPConnector{}
+	lnet := &networking.UDPConnector{Log: zap.NewNop()}
 	netbase.RegisterNetProvider(lnet)
 
 	benchmark.RunSCIONBenchmark(daemonAddr, localAddr, remoteAddr, authModes, ntskeServer, log)
 }
 
 func runSimulation(seed int64) {
-	lclk := simulation.NewSimulationClock(seed)
+	lclk := simulation.NewSimulationClock(seed, log)
 	timebase.RegisterClock(lclk)
 
-	lcrypt := simulation.NewSimCrypto(seed)
+	lcrypt := simulation.NewSimCrypto(seed, log)
 	cryptobase.RegisterCrypto(lcrypt)
 
-	lnet := &simulation.SimConnector{}
+	lnet := simulation.NewSimConnector(log)
 	netbase.RegisterNetProvider(lnet)
 }
 

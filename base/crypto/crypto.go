@@ -10,6 +10,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/binary"
+	"go.uber.org/zap"
 	"math"
 
 	"example.com/scion-time/base/cryptobase"
@@ -17,7 +18,7 @@ import (
 
 // SafeCrypto provides random number generation and utilities based on crypto/rand, safe to be used in prod
 type SafeCrypto struct {
-	// TODO: do we need anything here?
+	Log *zap.Logger
 }
 
 // RandIntn enables the use of the SafeCrypto struct as an "inheritor" of [cryptobase.CryptoProvider]

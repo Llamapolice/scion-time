@@ -4,12 +4,13 @@ import (
 	"example.com/scion-time/base/netprovider"
 	"example.com/scion-time/net/udp"
 	"github.com/libp2p/go-reuseport"
+	"go.uber.org/zap"
 	"net"
 	"time"
 )
 
 type UDPConnector struct {
-	// Nothing yet
+	Log *zap.Logger
 }
 
 func (U *UDPConnector) ListenUDP(network string, laddr *net.UDPAddr) (netprovider.Connection, error) {

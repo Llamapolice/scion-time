@@ -1,47 +1,49 @@
 package simulation
 
 import (
+	"go.uber.org/zap"
 	"time"
 
 	"example.com/scion-time/base/timebase"
 )
 
-type SimulationClock struct {
+type SimClock struct {
 	seed int64 // still TODO if this is needed
+	log  *zap.Logger
 }
 
-func NewSimulationClock(seed int64) *SimulationClock {
-	return &SimulationClock{seed: seed}
+func NewSimulationClock(seed int64, log *zap.Logger) *SimClock {
+	return &SimClock{seed: seed, log: log}
 }
 
-func (c *SimulationClock) Epoch() uint64 {
+func (c *SimClock) Epoch() uint64 {
 	//TODO implement me
-	panic("SimulationClock.Epoch() implement me")
+	panic("SimClock.Epoch() implement me")
 }
 
-func (c *SimulationClock) Now() time.Time {
+func (c *SimClock) Now() time.Time {
 	//TODO implement me
-	panic("SimulationClock.Now(): implement me")
+	panic("SimClock.Now(): implement me")
 }
 
-func (c *SimulationClock) MaxDrift(duration time.Duration) time.Duration {
+func (c *SimClock) MaxDrift(duration time.Duration) time.Duration {
 	//TODO implement me
-	panic("SimulationClock.MaxDrift(): implement me")
+	panic("SimClock.MaxDrift(): implement me")
 }
 
-func (c *SimulationClock) Step(offset time.Duration) {
+func (c *SimClock) Step(offset time.Duration) {
 	//TODO implement me
-	panic("SimulationClock.Step(): implement me")
+	panic("SimClock.Step(): implement me")
 }
 
-func (c *SimulationClock) Adjust(offset, duration time.Duration, frequency float64) {
+func (c *SimClock) Adjust(offset, duration time.Duration, frequency float64) {
 	//TODO implement me
-	panic("SimulationClock.Adjust(): implement me")
+	panic("SimClock.Adjust(): implement me")
 }
 
-func (c *SimulationClock) Sleep(duration time.Duration) {
+func (c *SimClock) Sleep(duration time.Duration) {
 	//TODO implement me
-	panic("SimulationClock.Sleep(): implement me")
+	panic("SimClock.Sleep(): implement me")
 }
 
-var _ timebase.LocalClock = (*SimulationClock)(nil)
+var _ timebase.LocalClock = (*SimClock)(nil)

@@ -2,12 +2,18 @@ package simulation
 
 import (
 	"example.com/scion-time/base/netprovider"
+	"go.uber.org/zap"
 	"net"
 	"time"
 )
 
 type SimConnector struct {
-	// Nothing yet
+	log *zap.Logger
+}
+
+func NewSimConnector(log *zap.Logger) *SimConnector {
+	log.Info("Creating a new sim connector")
+	return &SimConnector{log: log}
 }
 
 func (s *SimConnector) ListenUDP(network string, laddr *net.UDPAddr) (netprovider.Connection, error) {
