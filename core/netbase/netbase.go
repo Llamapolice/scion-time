@@ -1,7 +1,7 @@
 package netbase
 
 import (
-	"example.com/scion-time/base/netbase"
+	"example.com/scion-time/base/netprovider"
 	"net"
 	"sync/atomic"
 	"time"

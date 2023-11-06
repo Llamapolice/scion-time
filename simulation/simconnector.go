@@ -1,7 +1,7 @@
 package simulation
 
 import (
-	netprovider "example.com/scion-time/base/netbase"
+	"example.com/scion-time/base/netprovider"
 	"net"
 	"time"
 )

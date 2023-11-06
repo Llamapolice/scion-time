@@ -3,7 +3,7 @@ package server
 import (
 	"context"
 	"crypto/subtle"
-	netprovider "example.com/scion-time/base/netbase"
+	"example.com/scion-time/base/netprovider"
 	"example.com/scion-time/core/netbase"
 	"net"
 	"net/netip"

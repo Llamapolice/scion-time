@@ -1,7 +1,7 @@
 package networking
 
 import (
-	"example.com/scion-time/base/netbase"
+	"example.com/scion-time/base/netprovider"
 	"example.com/scion-time/net/udp"
 	"net"
 	"time"
