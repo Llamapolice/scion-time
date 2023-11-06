@@ -38,7 +38,8 @@ func (s *SimConnector) ReadTXTimestamp(n netprovider.Connection) (time.Time, uin
 
 func (s *SimConnector) ListenPacket(network string, address string) (netprovider.Connection, error) {
 	// TODO implement me
-	panic("implement me")
+	s.log.Info("Opening a new sim connection")
+	return &SimConnection{Log: s.log}, nil
 }
 
 var _ netprovider.ConnProvider = (*SimConnector)(nil)
