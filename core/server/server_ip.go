@@ -8,7 +8,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/libp2p/go-reuseport"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 
@@ -222,7 +221,7 @@ func StartIPServer(ctx context.Context, log *zap.Logger,
 		go runIPServer(log, mtrcs, conn, localHost.Zone, dscp, provider)
 	} else {
 		for i := ipServerNumGoroutine; i > 0; i-- {
-			conn, err := reuseport.ListenPacket("udp",
+			conn, err := netbase.ListenPacket("udp",
 				net.JoinHostPort(localHost.IP.String(), strconv.Itoa(localHost.Port)))
 			if err != nil {
 				log.Fatal("failed to listen for packets", zap.Error(err))

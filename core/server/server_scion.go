@@ -12,7 +12,6 @@ import (
 
 	"github.com/google/gopacket"
 
-	"github.com/libp2p/go-reuseport"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 
@@ -495,7 +494,7 @@ func StartSCIONServer(ctx context.Context, log *zap.Logger,
 	} else {
 		for i := scionServerNumGoroutine; i > 0; i-- {
 			fetcher := scion.NewFetcher(scion.NewDaemonConnector(ctx, daemonAddr))
-			conn, err := reuseport.ListenPacket("udp",
+			conn, err := netbase.ListenPacket("udp",
 				net.JoinHostPort(localHost.IP.String(), strconv.Itoa(localHost.Port)))
 			if err != nil {
 				log.Fatal("failed to listen for packets", zap.Error(err))

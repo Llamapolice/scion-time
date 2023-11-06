@@ -43,3 +43,7 @@ func SetDSCP(n netprovider.Connection, dscp uint8) error {
 func ReadTXTimestamp(n netprovider.Connection) (time.Time, uint32, error) {
 	return getNetProvider().ReadTXTimestamp(n)
 }
+
+func ListenPacket(network string, address string) (netprovider.Connection, error) {
+	return getNetProvider().ListenPacket(network, address)
+}

@@ -26,4 +26,5 @@ type ConnProvider interface {
 	EnableTimestamping(n Connection, localHostIface string) error
 	SetDSCP(n Connection, dscp uint8) error
 	ReadTXTimestamp(n Connection) (time.Time, uint32, error)
+	ListenPacket(network string, address string) (Connection, error)
 }

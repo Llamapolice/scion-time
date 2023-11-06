@@ -30,4 +30,9 @@ func (s *SimConnector) ReadTXTimestamp(n netprovider.Connection) (time.Time, uin
 	panic("implement me")
 }
 
+func (s *SimConnector) ListenPacket(network string, address string) (netprovider.Connection, error) {
+	// TODO implement me
+	panic("implement me")
+}
+
 var _ netprovider.ConnProvider = (*SimConnector)(nil)
