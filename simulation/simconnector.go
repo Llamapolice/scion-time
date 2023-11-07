@@ -18,22 +18,30 @@ func NewSimConnector(log *zap.Logger) *SimConnector {
 
 func (s *SimConnector) ListenUDP(network string, laddr *net.UDPAddr) (netprovider.Connection, error) {
 	//TODO implement me
-	panic("implement me")
+	panic("ListenUDP: implement me")
 }
 
-func (s *SimConnector) EnableTimestamping(n netprovider.Connection, localHostIface string) error {
-	//TODO implement me
-	panic("implement me")
+func (s *SimConnector) EnableTimestamping(n netprovider.Connection, localhostIface string) error {
+	//TODO does this need more code?
+	//panic("1st line")
+	s.log.Info("Enabling timestamping")
+	panic("2nd line")
+	if _, ok := n.(*SimConnection); !ok {
+		panic("inside if")
+		s.log.Error("SimConnector method EnableTimestamping called on a non-simulated connection")
+	}
+	panic("Test?")
+	return nil
 }
 
 func (s *SimConnector) SetDSCP(n netprovider.Connection, dscp uint8) error {
 	//TODO implement me
-	panic("implement me")
+	panic("SetDSCP: implement me")
 }
 
 func (s *SimConnector) ReadTXTimestamp(n netprovider.Connection) (time.Time, uint32, error) {
 	//TODO implement me
-	panic("implement me")
+	panic("ReadTXTimestamp: implement me")
 }
 
 func (s *SimConnector) ListenPacket(network string, address string) (netprovider.Connection, error) {
