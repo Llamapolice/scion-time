@@ -5,6 +5,7 @@ import (
 	"crypto/subtle"
 	"example.com/scion-time/base/netprovider"
 	"example.com/scion-time/core/netbase"
+	"fmt"
 	"net"
 	"net/netip"
 	"strconv"
@@ -129,6 +130,8 @@ func runSCIONServer(ctx context.Context, log *zap.Logger, mtrcs *scionServerMetr
 			log.Error("failed to read packet", zap.Int("flags", flags))
 			continue
 		}
+		log.Warn(fmt.Sprintf("Reading from Connection, n: %d, oobn: %d, flags: %d, addr raw: %v, addr string: %s\n", n, oobn, flags, lastHop, lastHop.String()))
+		log.Warn(fmt.Sprintf("In first n bytes of buf: %v, first oobn bytes of oob: %v\n", buf[:n], oob[:oobn]))
 		oob = oob[:oobn]
 		rxt, err := udp.TimestampFromOOBData(oob)
 		if err != nil {

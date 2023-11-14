@@ -33,20 +33,19 @@ func (receiver InterceptedConn) WriteToUDPAddrPort(b []byte, addr netip.AddrPort
 }
 
 func (U *UDPConnector) ListenUDP(network string, laddr *net.UDPAddr) (netprovider.Connection, error) {
-	conn, err := net.ListenUDP(network, laddr)
-	return InterceptedConn{conn}, err
+	return net.ListenUDP(network, laddr)
 }
 
 func (U *UDPConnector) EnableTimestamping(n netprovider.Connection, localHostIface string) error {
-	return udp.EnableTimestamping(n.(InterceptedConn).UDPConn, localHostIface)
+	return udp.EnableTimestamping(n.(*net.UDPConn), localHostIface)
 }
 
 func (U *UDPConnector) SetDSCP(n netprovider.Connection, dscp uint8) error {
-	return udp.SetDSCP(n.(InterceptedConn).UDPConn, dscp)
+	return udp.SetDSCP(n.(*net.UDPConn), dscp)
 }
 
 func (U *UDPConnector) ReadTXTimestamp(n netprovider.Connection) (time.Time, uint32, error) {
-	return udp.ReadTXTimestamp(n.(InterceptedConn).UDPConn)
+	return udp.ReadTXTimestamp(n.(*net.UDPConn))
 }
 
 func (U *UDPConnector) ListenPacket(network string, address string) (netprovider.Connection, error) {
