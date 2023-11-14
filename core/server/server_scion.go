@@ -33,7 +33,7 @@ import (
 )
 
 const (
-	scionServerNumGoroutine = 8
+	scionServerNumGoroutine = 1
 )
 
 type scionServerMetrics struct {
