@@ -12,24 +12,6 @@ type UDPConnector struct {
 	// Nothing yet
 }
 
-//type InterceptedConn struct {
-//	*net.UDPConn
-//}
-//
-//func (receiver InterceptedConn) ReadMsgUDPAddrPort(buf []byte, oob []byte) (n int, oobn int, flags int, addr netip.AddrPort, err error) {
-//	n, oobn, flags, addr, err = receiver.UDPConn.ReadMsgUDPAddrPort(buf, oob)
-//	fmt.Printf("Reading from Connection, n: %d, oobn: %d, flags: %d, addr raw: %v, addr string: %s\n", n, oobn, flags, addr, addr.String())
-//	fmt.Printf("In first n bytes of buf: %v, first oobn bytes of oob: %v\n", buf[:n], oob[:oobn])
-//	return
-//}
-//
-//func (receiver InterceptedConn) WriteToUDPAddrPort(b []byte, addr netip.AddrPort) (int, error) {
-//	n, err := receiver.UDPConn.WriteToUDPAddrPort(b, addr)
-//	fmt.Printf("Writing to Connetion, addr raw: %v, addr string: %s\n", addr, addr.String())
-//	fmt.Printf("Buffer to be written: %v, n bytes written(?): %d", b, n)
-//	return n, err
-//}
-
 func (U *UDPConnector) ListenUDP(network string, laddr *net.UDPAddr) (netprovider.Connection, error) {
 	return net.ListenUDP(network, laddr)
 }
