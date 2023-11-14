@@ -10,6 +10,9 @@ import (
 
 type SimConnection struct {
 	Log *zap.Logger
+
+	// Following are temporary, might be nice for debugging, but might change
+	DSCP uint8
 }
 
 func (S *SimConnection) Close() error {
@@ -24,8 +27,10 @@ func (S *SimConnection) Write(b []byte) (n int, err error) {
 }
 
 func (S *SimConnection) ReadMsgUDPAddrPort(buf []byte, oob []byte) (n int, oobn int, flags int, addr netip.AddrPort, err error) {
-	//TODO implement me
-	panic("ReadMsgUDPAddrPort: implement me")
+	// TODO this is still temporary and just returns empty messages
+	// Maybe we just need to spin here until we actually get a message? Behavior of original ReadMsg is not clear to me
+	S.Log.Debug("Connection was asked to ReadMsgUDPAddrPort")
+	return 0, 0, 0, netip.AddrPort{}, nil
 }
 
 func (S *SimConnection) WriteToUDPAddrPort(b []byte, addr netip.AddrPort) (int, error) {

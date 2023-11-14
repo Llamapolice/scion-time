@@ -318,6 +318,8 @@ func createClocks(cfg svcConfig, localAddr *snet.UDPAddr) (
 	refClocks, netClocks []client.ReferenceClock) {
 	dscp := dscp(cfg)
 
+	// this for example could be a simulated gps clock
+	// maybe implement this using something like SimReferenceClocks (also then in config)
 	for _, s := range cfg.MBGReferenceClocks {
 		refClocks = append(refClocks, &mbgReferenceClock{
 			dev: s,

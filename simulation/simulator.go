@@ -63,5 +63,8 @@ func RunSimulation(lclk timebase.LocalClock, lcrypt cryptobase.CryptoProvider, l
 		// Drop, corrupt, duplicate, kill, start, disconnect connections and instances as needed
 		condition = false
 	}
+
+	select {}
+
 	log.Info("Ended simulation (successfully?)")
 }

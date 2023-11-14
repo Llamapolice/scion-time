@@ -10,10 +10,12 @@ import (
 type SimClock struct {
 	seed int64 // still TODO if this is needed
 	log  *zap.Logger
+
+	counter int // See Now() below
 }
 
 func NewSimulationClock(seed int64, log *zap.Logger) *SimClock {
-	return &SimClock{seed: seed, log: log}
+	return &SimClock{seed: seed, log: log, counter: 0}
 }
 
 func (c *SimClock) Epoch() uint64 {
@@ -23,7 +25,15 @@ func (c *SimClock) Epoch() uint64 {
 
 func (c *SimClock) Now() time.Time {
 	//TODO implement me
-	panic("SimClock.Now(): implement me")
+	if c.counter > 10 { // Hack to stop endless looping
+		panic("Hard cutoff point reached")
+	}
+	c.counter++
+
+	var s int64 = 0
+	var ns int64 = 0
+	c.log.Debug("Time is now", zap.Int64("s", s), zap.Int64("ns", ns))
+	return time.Unix(s, ns)
 }
 
 func (c *SimClock) MaxDrift(duration time.Duration) time.Duration {
