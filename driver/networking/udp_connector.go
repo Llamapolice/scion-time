@@ -38,15 +38,15 @@ func (U *UDPConnector) ListenUDP(network string, laddr *net.UDPAddr) (netprovide
 }
 
 func (U *UDPConnector) EnableTimestamping(n netprovider.Connection, localHostIface string) error {
-	return udp.EnableTimestamping(n.(*InterceptedConn).UDPConn, localHostIface)
+	return udp.EnableTimestamping(n.(InterceptedConn).UDPConn, localHostIface)
 }
 
 func (U *UDPConnector) SetDSCP(n netprovider.Connection, dscp uint8) error {
-	return udp.SetDSCP(n.(*InterceptedConn).UDPConn, dscp)
+	return udp.SetDSCP(n.(InterceptedConn).UDPConn, dscp)
 }
 
 func (U *UDPConnector) ReadTXTimestamp(n netprovider.Connection) (time.Time, uint32, error) {
-	return udp.ReadTXTimestamp(n.(*InterceptedConn).UDPConn)
+	return udp.ReadTXTimestamp(n.(InterceptedConn).UDPConn)
 }
 
 func (U *UDPConnector) ListenPacket(network string, address string) (netprovider.Connection, error) {
