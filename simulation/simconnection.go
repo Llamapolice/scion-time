@@ -12,7 +12,9 @@ type SimConnection struct {
 	Log *zap.Logger
 
 	// Following are temporary, might be nice for debugging, but might change
-	DSCP uint8
+	Network string
+	LAddr   string
+	DSCP    uint8
 }
 
 func (S *SimConnection) Close() error {
@@ -45,12 +47,42 @@ func (S *SimConnection) ReadMsgUDPAddrPort(buf []byte, oob []byte) (n int, oobn 
 	// oob: [64, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 65, 0, 0, 0, 150, 159, 83, 101, 0, 0, 0, 0, 238, 208, 73, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
 
 	S.Log.Debug("Connection was asked to ReadMsgUDPAddrPort")
-	return 0, 0, 0, netip.AddrPort{}, nil
+	n, oobn, flags = 204, 64, 0
+	data := []byte{0, 0, 0, 0, 17, 37, 0, 56, 1, 0, 0, 0, 0, 1, 255, 0, 0, 0, 1, 17, 0, 1, 255, 0, 0, 0, 1, 18, 10, 1, 1, 11, 10, 1, 1, 12, 134, 0, 32, 194, 0, 0, 202, 140, 101, 83, 159, 144, 0, 0, 90, 193, 101, 83, 158, 241, 1, 0, 180, 181, 101, 83, 158, 241, 0, 63, 1, 239, 0, 0, 75, 159, 32, 232, 237, 118, 0, 63, 0, 0, 0, 113, 129, 0, 17, 7, 90, 179, 0, 63, 0, 104, 0, 0, 69, 36, 39, 49, 169, 121, 0, 63, 0, 1, 0, 2, 42, 142, 143, 113, 237, 10, 0, 63, 0, 0, 0, 6, 229, 182, 163, 25, 228, 86, 0, 63, 0, 0, 0, 5, 4, 196, 245, 238, 138, 110, 0, 63, 0, 104, 0, 0, 78, 242, 29, 211, 219, 222, 183, 172, 39, 139, 0, 56, 25, 25, 35, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 232, 254, 30, 22, 10, 241, 187, 231}
+	oodata := []byte{64, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 65, 0, 0, 0, 150, 159, 83, 101, 0, 0, 0, 0, 83, 222, 176, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
+
+	if len(data) > cap(buf) {
+		S.Log.Error("Buffer passed to ReadMsgUDPAddrPort is too small", zap.Int("data length", len(data)), zap.Int("buffer capacity", cap(buf)))
+		return 0, 0, 0, netip.AddrPort{}, SimConnectorError{"buffer too small"}
+	}
+	for i, item := range data {
+		buf[i] = item
+	}
+
+	if len(oodata) > cap(oob) {
+		// TODO: why is the passed buffer smaller than what i get out in my example?
+		S.Log.Error("OOBuffer passed to ReadMsgUDPAddrPort is too small", zap.Int("oodata length", len(oodata)), zap.Int("oob capacity", cap(oob)))
+		//return 0, 0, 0, netip.AddrPort{}, SimConnectorError{"oob too small"}
+	}
+	//for i, item := range oodata {
+	//	if i > cap(oob) {
+	//		break
+	//	}
+	//	oob[i] = item
+	//}
+
+	for i := 0; i < 60; i++ {
+		oob[i] = oodata[i]
+	}
+
+	addr = netip.MustParseAddrPort("10.0.0.73:31024")
+	return n, 60, flags, addr, nil
 }
 
 func (S *SimConnection) WriteToUDPAddrPort(b []byte, addr netip.AddrPort) (int, error) {
 	//TODO implement me
-	panic("WriteToUDPAddrPort: implement me")
+	S.Log.Debug("Message to be written", zap.Binary("msg", b), zap.String("target addr", addr.String()))
+	return len(b), nil
 }
 
 func (S *SimConnection) SetDeadline(t time.Time) error {

@@ -598,7 +598,7 @@ func runSCIONTool(daemonAddr, dispatcherMode string, localAddr, remoteAddr *snet
 		server.StartSCIONDispatcher(ctx, log, snet.CopyUDPAddr(localAddr.Host))
 	}
 
-	dc := scion.NewDaemonConnector(ctx, daemonAddr)
+	dc := netbase.NewDaemonConnector(ctx, daemonAddr)
 
 	var ps []snet.Path
 	if remoteAddr.IA.Equal(localAddr.IA) {

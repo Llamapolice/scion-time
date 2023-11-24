@@ -1,9 +1,12 @@
 package networking
 
 import (
+	"context"
 	"example.com/scion-time/base/netprovider"
+	"example.com/scion-time/net/scion"
 	"example.com/scion-time/net/udp"
 	"github.com/libp2p/go-reuseport"
+	"github.com/scionproto/scion/pkg/daemon"
 	"go.uber.org/zap"
 	"net"
 	"time"
@@ -11,6 +14,10 @@ import (
 
 type UDPConnector struct {
 	Log *zap.Logger
+}
+
+func (U *UDPConnector) NewDaemonConnector(ctx context.Context, daemonAddr string) daemon.Connector {
+	return scion.NewDaemonConnector(ctx, daemonAddr)
 }
 
 func (U *UDPConnector) ListenUDP(network string, laddr *net.UDPAddr) (netprovider.Connection, error) {

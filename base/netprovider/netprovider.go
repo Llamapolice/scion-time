@@ -1,6 +1,8 @@
 package netprovider
 
 import (
+	"context"
+	"github.com/scionproto/scion/pkg/daemon"
 	"net"
 	"net/netip"
 	"time"
@@ -27,4 +29,5 @@ type ConnProvider interface {
 	SetDSCP(n Connection, dscp uint8) error
 	ReadTXTimestamp(n Connection) (time.Time, uint32, error)
 	ListenPacket(network string, address string) (Connection, error)
+	NewDaemonConnector(ctx context.Context, daemonAddr string) daemon.Connector
 }

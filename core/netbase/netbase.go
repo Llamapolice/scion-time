@@ -1,7 +1,9 @@
 package netbase
 
 import (
+	"context"
 	"example.com/scion-time/base/netprovider"
+	"github.com/scionproto/scion/pkg/daemon"
 	"net"
 	"sync/atomic"
 	"time"
@@ -46,4 +48,8 @@ func ReadTXTimestamp(n netprovider.Connection) (time.Time, uint32, error) {
 
 func ListenPacket(network string, address string) (netprovider.Connection, error) {
 	return getNetProvider().ListenPacket(network, address)
+}
+
+func NewDaemonConnector(ctx context.Context, daemonAddr string) daemon.Connector {
+	return getNetProvider().NewDaemonConnector(ctx, daemonAddr)
 }

@@ -48,14 +48,30 @@ func RunSimulation(lclk timebase.LocalClock, lcrypt cryptobase.CryptoProvider, l
 	// Some logic to read a config file and fill a settings struct
 
 	// Some set up to build the simulated network and start instances
+	// SCION Server 1:
 	ctx := context.Background()
+	provider := ntske.NewProvider()
+
 	var localAddr snet.UDPAddr
-	err := localAddr.Set("[1-ff00:0:110,192.0.2.1]:80") // Copied example addr from snet/udpaddr.go
+	err := localAddr.Set("1-ff00:0:111,10.1.1.11") // Using testnet/gen-eh/ASff00_0_111/ts1-ff00_0_111-1.toml for now
 	if err != nil {
 		log.Fatal("Local address failed to parse")
 	}
 
-	server.StartSCIONServer(ctx, log, "sim_daemonAddr", snet.CopyUDPAddr(localAddr.Host), 0, ntske.NewProvider())
+	log.Info("Starting first server")
+	server.StartSCIONServer(ctx, log, "10.1.1.11:30255", snet.CopyUDPAddr(localAddr.Host), 0, provider)
+
+	// SCION Server 2:
+	//ctx2 := context.Background()
+	//err = localAddr.Set("1-ff00:0:112,10.1.1.12") // Using testnet/gen-eh/ASff00_0_112/ts1-ff00_0_112-1.toml for now
+	//if err != nil {
+	//	log.Fatal("Local address failed to parse")
+	//}
+	//
+	//log.Info("Starting second server")
+	//server.StartSCIONServer(ctx2, log, "10.1.1.12:30255", snet.CopyUDPAddr(localAddr.Host), 0, provider)
+
+	// Client
 
 	// Main loop of simulation
 	for condition := true; condition; {
