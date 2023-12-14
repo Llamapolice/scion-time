@@ -124,7 +124,12 @@ func initLogger(verbose bool) {
 		//	p = "..." + p[len(p)-27:]
 		//}
 		p := caller.FullPath() // Full path so i can click it in the IDE output :)
-		p = p[52:]             // remove up to project root the worst way possible
+		cwd, err := os.Getwd()
+		if err != nil {
+			enc.AppendString(fmt.Sprintf("%30s", p))
+			return
+		}
+		p = strings.TrimPrefix(p, cwd+"/")
 		enc.AppendString(fmt.Sprintf("%30s", p))
 	}
 	if !verbose {
