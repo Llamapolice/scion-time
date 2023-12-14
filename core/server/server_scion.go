@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/netip"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/google/gopacket"
@@ -44,26 +45,26 @@ type scionServerMetrics struct {
 	reqsServed        prometheus.Counter
 }
 
-func newSCIONServerMetrics() *scionServerMetrics {
+func newSCIONServerMetrics(id string) *scionServerMetrics { // Had to add some way to have multiple metrics in the same process
 	return &scionServerMetrics{
 		pktsReceived: promauto.NewCounter(prometheus.CounterOpts{
-			Name: metrics.SCIONServerPktsReceivedN,
+			Name: metrics.SCIONServerPktsReceivedN + id,
 			Help: metrics.SCIONServerPktsReceivedH,
 		}),
 		pktsForwarded: promauto.NewCounter(prometheus.CounterOpts{
-			Name: metrics.SCIONServerPktsForwardedN,
+			Name: metrics.SCIONServerPktsForwardedN + id,
 			Help: metrics.SCIONServerPktsForwardedH,
 		}),
 		pktsAuthenticated: promauto.NewCounter(prometheus.CounterOpts{
-			Name: metrics.SCIONServerPktsAuthenticatedN,
+			Name: metrics.SCIONServerPktsAuthenticatedN + id,
 			Help: metrics.SCIONServerPktsAuthenticatedH,
 		}),
 		reqsAccepted: promauto.NewCounter(prometheus.CounterOpts{
-			Name: metrics.SCIONServerReqsAcceptedN,
+			Name: metrics.SCIONServerReqsAcceptedN + id,
 			Help: metrics.SCIONServerReqsAcceptedH,
 		}),
 		reqsServed: promauto.NewCounter(prometheus.CounterOpts{
-			Name: metrics.SCIONServerReqsServedN,
+			Name: metrics.SCIONServerReqsServedN + id,
 			Help: metrics.SCIONServerReqsServedH,
 		}),
 	}
@@ -482,7 +483,14 @@ func StartSCIONServer(ctx context.Context, log *zap.Logger,
 	localHostPort := localHost.Port
 	localHost.Port = scion.EndhostPort
 
-	mtrcs := newSCIONServerMetrics()
+	// Is there some better way to solve this?
+	id := strings.Map(func(r rune) rune {
+		if r == '.' || r == ':' {
+			return '_'
+		}
+		return r
+	}, localHost.String())
+	mtrcs := newSCIONServerMetrics("_" + id)
 
 	if scionServerNumGoroutine == 1 {
 		fetcher := scion.NewFetcher(netbase.NewDaemonConnector(ctx, daemonAddr))
@@ -517,7 +525,13 @@ func StartSCIONDispatcher(ctx context.Context, log *zap.Logger,
 
 	localHost.Port = scion.EndhostPort
 
-	mtrcs := newSCIONServerMetrics()
+	id := strings.Map(func(r rune) rune {
+		if r == '.' || r == ':' {
+			return '_'
+		}
+		return r
+	}, localHost.String())
+	mtrcs := newSCIONServerMetrics("_" + id)
 
 	conn, err := netbase.ListenUDP("udp", localHost)
 	if err != nil {

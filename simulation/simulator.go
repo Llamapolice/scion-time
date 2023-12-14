@@ -65,14 +65,15 @@ func RunSimulation(lclk timebase.LocalClock, lcrypt cryptobase.CryptoProvider, l
 	server.StartSCIONServer(ctx, log, "", snet.CopyUDPAddr(localAddr.Host), 0, provider)
 
 	// SCION Server 2:
-	//ctx2 := context.Background()
-	//err = localAddr.Set("1-ff00:0:112,10.1.1.12") // Using testnet/gen-eh/ASff00_0_112/ts1-ff00_0_112-1.toml for now
-	//if err != nil {
-	//	log.Fatal("Local address failed to parse")
-	//}
-	//
-	//log.Info("Starting second server")
+	ctx2 := context.Background()
+	err = localAddr.Set("1-ff00:0:112,10.1.1.12") // Using testnet/gen-eh/ASff00_0_112/ts1-ff00_0_112-1.toml for now
+	if err != nil {
+		log.Fatal("Local address failed to parse")
+	}
+
+	log.Info("Starting second server")
 	//server.StartSCIONServer(ctx2, log, "10.1.1.12:30255", snet.CopyUDPAddr(localAddr.Host), 0, provider)
+	server.StartSCIONServer(ctx2, log, "", snet.CopyUDPAddr(localAddr.Host), 0, provider)
 
 	// Client
 
