@@ -132,6 +132,8 @@ go build timeservice.go timeservicex.go
 ```bash
 cd $SCION_TIME_ROOT/testnet
 
+export SCION_BIN=$SCION_ROOT/bin
+
 rm -rf logs
 ./scion-topo-gen-crypto.sh
 ./testnet-up.sh
