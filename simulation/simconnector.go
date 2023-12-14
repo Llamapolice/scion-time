@@ -15,6 +15,8 @@ import (
 )
 
 type SimConnector struct {
+	CallBack chan *SimConnection
+
 	log *zap.Logger
 }
 
@@ -85,7 +87,10 @@ func NewSimConnector(log *zap.Logger) *SimConnector {
 
 func (s *SimConnector) ListenUDP(network string, laddr *net.UDPAddr) (netprovider.Connection, error) {
 	s.log.Info("Opening a new sim connection")
-	return &SimConnection{Log: s.log, Network: network, LAddr: laddr.String()}, nil
+	simConn := &SimConnection{Log: s.log, Network: network, LAddr: laddr.String()}
+	s.CallBack <- simConn
+	s.log.Debug("Sim connection passed into channel")
+	return simConn, nil
 }
 
 func (s *SimConnector) EnableTimestamping(n netprovider.Connection, localhostIface string) error {

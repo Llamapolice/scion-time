@@ -42,12 +42,26 @@ type connection struct {
 	maxLatency                      time.Duration
 }
 
-func RunSimulation(lclk timebase.LocalClock, lcrypt cryptobase.CryptoProvider, lnet netprovider.ConnProvider, log *zap.Logger) {
+func RunSimulation(
+	lclk timebase.LocalClock,
+	lcrypt cryptobase.CryptoProvider,
+	lnet netprovider.ConnProvider,
+	log *zap.Logger,
+) {
 	log.Info("Starting simulation")
 
 	// Some logic to read a config file and fill a settings struct
 
 	// Some set up to build the simulated network and start instances
+	// Register some channels into the sims
+	simConnectionListener := make(chan *SimConnection, 2) // Size 2 as to not block since the connection is opened within the main routine
+
+	simConnector, ok := lnet.(*SimConnector)
+	if !ok {
+		log.Fatal("Non-simulated connector passed into simulation")
+	}
+	simConnector.CallBack = simConnectionListener
+
 	// SCION Server 1:
 	ctx := context.Background()
 	provider := ntske.NewProvider()
@@ -63,6 +77,14 @@ func RunSimulation(lclk timebase.LocalClock, lcrypt cryptobase.CryptoProvider, l
 	//server.StartSCIONServer(ctx, log, "10.1.1.11:30255", snet.CopyUDPAddr(localAddr.Host), 0, provider)
 	// Without daemon addr
 	server.StartSCIONServer(ctx, log, "", snet.CopyUDPAddr(localAddr.Host), 0, provider)
+	server1Connection := <-simConnectionListener
+	server1Connection.Id = "server_1"
+	log.Debug("Simulator received connection of server 1")
+
+	s1ReceiveFrom := make(chan SimPacket)
+	s1SendTo := make(chan SimPacket)
+	server1Connection.ReadFrom = s1SendTo
+	server1Connection.WriteTo = s1ReceiveFrom
 
 	// SCION Server 2:
 	ctx2 := context.Background()
@@ -74,6 +96,14 @@ func RunSimulation(lclk timebase.LocalClock, lcrypt cryptobase.CryptoProvider, l
 	log.Info("Starting second server")
 	//server.StartSCIONServer(ctx2, log, "10.1.1.12:30255", snet.CopyUDPAddr(localAddr.Host), 0, provider)
 	server.StartSCIONServer(ctx2, log, "", snet.CopyUDPAddr(localAddr.Host), 0, provider)
+	server2Connection := <-simConnectionListener
+	server2Connection.Id = "server_2"
+	log.Debug("Simulator received connection of server 2")
+
+	s2ReceiveFrom := make(chan SimPacket)
+	s2SendTo := make(chan SimPacket)
+	server2Connection.ReadFrom = s2SendTo
+	server2Connection.WriteTo = s2ReceiveFrom
 
 	// Client
 
