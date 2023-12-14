@@ -3,6 +3,7 @@ package netbase
 import (
 	"context"
 	"example.com/scion-time/base/netprovider"
+	"example.com/scion-time/net/scion"
 	"github.com/scionproto/scion/pkg/daemon"
 	"net"
 	"sync/atomic"
@@ -51,5 +52,7 @@ func ListenPacket(network string, address string) (netprovider.Connection, error
 }
 
 func NewDaemonConnector(ctx context.Context, daemonAddr string) daemon.Connector {
-	return getNetProvider().NewDaemonConnector(ctx, daemonAddr)
+	// Use standard NewDaemonConnector for now
+	return scion.NewDaemonConnector(ctx, daemonAddr)
+	//return getNetProvider().NewDaemonConnector(ctx, daemonAddr)
 }

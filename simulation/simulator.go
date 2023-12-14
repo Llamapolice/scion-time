@@ -59,7 +59,10 @@ func RunSimulation(lclk timebase.LocalClock, lcrypt cryptobase.CryptoProvider, l
 	}
 
 	log.Info("Starting first server")
-	server.StartSCIONServer(ctx, log, "10.1.1.11:30255", snet.CopyUDPAddr(localAddr.Host), 0, provider)
+	// With daemon addr
+	//server.StartSCIONServer(ctx, log, "10.1.1.11:30255", snet.CopyUDPAddr(localAddr.Host), 0, provider)
+	// Without daemon addr
+	server.StartSCIONServer(ctx, log, "", snet.CopyUDPAddr(localAddr.Host), 0, provider)
 
 	// SCION Server 2:
 	//ctx2 := context.Background()
