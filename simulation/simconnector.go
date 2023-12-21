@@ -87,7 +87,7 @@ func NewSimConnector(log *zap.Logger) *SimConnector {
 
 func (s *SimConnector) ListenUDP(network string, laddr *net.UDPAddr) (netprovider.Connection, error) {
 	s.log.Info("Opening a new sim connection")
-	simConn := &SimConnection{Log: s.log, Network: network, LAddr: laddr.String()}
+	simConn := &SimConnection{Log: s.log, Network: network, LAddr: laddr}
 	s.CallBack <- simConn
 	s.log.Debug("Sim connection passed into channel")
 	return simConn, nil

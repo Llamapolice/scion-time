@@ -16,7 +16,7 @@ type SimConnection struct {
 
 	// Following are temporary, might be nice for debugging, but might change
 	Network string
-	LAddr   string
+	LAddr   *net.UDPAddr
 	DSCP    uint8
 }
 
@@ -75,6 +75,7 @@ func (S *SimConnection) ReadMsgUDPAddrPort(buf []byte, oob []byte) (
 	for i, item := range data {
 		buf[i] = item
 	}
+	n = len(data)
 
 	// We don't generate ood cause no actual NIC touches our message
 	//if len(oodata) > cap(oob) {
@@ -88,7 +89,7 @@ func (S *SimConnection) ReadMsgUDPAddrPort(buf []byte, oob []byte) (
 
 func (S *SimConnection) WriteToUDPAddrPort(b []byte, addr netip.AddrPort) (int, error) {
 	//TODO implement me
-	S.Log.Debug("Message to be written", zap.Binary("msg", b), zap.String("target addr", addr.String()))
+	S.Log.Debug("Message to be written", zap.String("connection id", S.Id), zap.Binary("msg", b), zap.String("target addr", addr.String()))
 	S.WriteTo <- SimPacket{B: b, Addr: addr}
 	return len(b), nil
 }
@@ -100,6 +101,7 @@ func (S *SimConnection) SetDeadline(t time.Time) error {
 
 func (S *SimConnection) LocalAddr() net.Addr {
 	//TODO implement me
+	return S.LAddr
 	panic("LocalAddr: implement me")
 }
 
