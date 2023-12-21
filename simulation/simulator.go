@@ -5,9 +5,12 @@ import (
 	"example.com/scion-time/base/cryptobase"
 	"example.com/scion-time/base/netprovider"
 	"example.com/scion-time/base/timebase"
+	"example.com/scion-time/core/client"
 	"example.com/scion-time/core/server"
 	"example.com/scion-time/net/ntske"
+	"example.com/scion-time/net/udp"
 	"github.com/scionproto/scion/pkg/snet"
+	"github.com/scionproto/scion/pkg/snet/path"
 	"go.uber.org/zap"
 	"time"
 )
@@ -106,6 +109,50 @@ func RunSimulation(
 	server2Connection.WriteTo = s2ReceiveFrom
 
 	// Client
+	// try with SCION version
+	ctxClient := context.Background()
+	var laddr udp.UDPAddr
+	var raddr udp.UDPAddr
+	var laddrSNET snet.UDPAddr
+	var raddrSNET snet.UDPAddr
+	err = laddrSNET.Set("1-ff00:0:112,10.1.1.12")
+	if err != nil {
+		log.Fatal("Tool local address failed to parse")
+	}
+	laddr = udp.UDPAddrFromSnet(&laddrSNET)
+	err = raddrSNET.Set("1-ff00:0:111,10.1.1.11:10123")
+	if err != nil {
+		log.Fatal("Tool remote address failed to parse")
+	}
+	raddr = udp.UDPAddrFromSnet(&raddrSNET)
+	ntpcs := []*client.SCIONClient{
+		{DSCP: 0, InterleavedMode: true},
+	}
+	ps := []snet.Path{
+		path.Path{Src: laddrSNET.IA, Dst: raddrSNET.IA, DataplanePath: path.Empty{}, NextHop: raddrSNET.Host},
+	}
+
+	go func() {
+		//_, err = client.MeasureClockOffsetIP(ctxClient, log, &client.IPClient{DSCP: 0, InterleavedMode: true}, laddrSNET.Host, raddrSNET.Host)
+		_, err := client.MeasureClockOffsetSCION(ctxClient, log, ntpcs, laddr, raddr, ps)
+		if err != nil {
+			log.Fatal("Tool had an error", zap.Error(err))
+		}
+	}()
+	clientConnection := <-simConnectionListener
+	clientConnection.Id = "client"
+	log.Debug("Simulator received connection of client")
+
+	cReceiveFrom := make(chan SimPacket)
+	cSendTo := make(chan SimPacket)
+	clientConnection.ReadFrom = cSendTo
+	clientConnection.WriteTo = cReceiveFrom
+
+	toolMsg := <-cReceiveFrom
+	log.Debug("Received packet from tool", zap.String("target addr", toolMsg.Addr.String()))
+
+	s1SendTo <- toolMsg
+	log.Debug("Forwarded packet to server 1")
 
 	// Main loop of simulation
 	for condition := true; condition; {
