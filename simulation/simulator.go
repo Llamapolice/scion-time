@@ -84,8 +84,10 @@ func RunSimulation(
 	server1Connection.Id = "server_1"
 	log.Debug("Simulator received connection of server 1")
 
+	s1step := make(chan struct{})
 	s1ReceiveFrom := make(chan SimPacket)
 	s1SendTo := make(chan SimPacket)
+	server1Connection.Step = s1step
 	server1Connection.ReadFrom = s1SendTo
 	server1Connection.WriteTo = s1ReceiveFrom
 
@@ -103,8 +105,10 @@ func RunSimulation(
 	server2Connection.Id = "server_2"
 	log.Debug("Simulator received connection of server 2")
 
+	s2step := make(chan struct{})
 	s2ReceiveFrom := make(chan SimPacket)
 	s2SendTo := make(chan SimPacket)
+	server2Connection.Step = s2step
 	server2Connection.ReadFrom = s2SendTo
 	server2Connection.WriteTo = s2ReceiveFrom
 
@@ -143,16 +147,28 @@ func RunSimulation(
 	clientConnection.Id = "client"
 	log.Debug("Simulator received connection of client")
 
+	cStep := make(chan struct{})
 	cReceiveFrom := make(chan SimPacket)
 	cSendTo := make(chan SimPacket)
+	clientConnection.Step = cStep
 	clientConnection.ReadFrom = cSendTo
 	clientConnection.WriteTo = cReceiveFrom
 
+	log.Debug("Sending step")
+	cStep <- struct{}{}
 	toolMsg := <-cReceiveFrom
 	log.Debug("Received packet from tool", zap.String("target addr", toolMsg.Addr.String()))
 
 	s1SendTo <- toolMsg
-	log.Debug("Forwarded packet to server 1")
+	log.Debug("Forwarded packet to server 1, waiting for response now")
+
+	// Receive response from server 1
+	log.Debug("Sending step")
+	s1step <- struct{}{}
+	server1Response := <-s1ReceiveFrom
+	log.Debug("Received response from server 1", zap.String("source addr", server1Response.Addr.String()))
+	// Forward response to client
+	cSendTo <- server1Response
 
 	// Main loop of simulation
 	for condition := true; condition; {

@@ -13,6 +13,7 @@ type SimConnection struct {
 	Id       string // maybe change to Int but start with string for easier debugging
 	ReadFrom chan SimPacket
 	WriteTo  chan SimPacket
+	Step     chan struct{}
 
 	// Following are temporary, might be nice for debugging, but might change
 	Network string
@@ -27,7 +28,7 @@ type SimPacket struct {
 
 func (S *SimConnection) Close() error {
 	//TODO implement me
-	S.Log.Debug("Closed simulated connection")
+	S.Log.Debug("Closed simulated connection", zap.String("connection id", S.Id), zap.String("network", S.Network))
 	return nil
 }
 
@@ -66,7 +67,7 @@ func (S *SimConnection) ReadMsgUDPAddrPort(buf []byte, oob []byte) (
 	//oodata := []byte{64, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 65, 0, 0, 0, 150, 159, 83, 101, 0, 0, 0, 0, 83, 222, 176, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
 
 	msg := <-S.ReadFrom
-	S.Log.Debug("Received message")
+	S.Log.Debug("Received message", zap.String("connection id", S.Id))
 	data := msg.B
 	if len(data) > cap(buf) {
 		S.Log.Error("Buffer passed to ReadMsgUDPAddrPort is too small", zap.Int("data length", len(data)), zap.Int("buffer capacity", cap(buf)))
@@ -90,6 +91,13 @@ func (S *SimConnection) ReadMsgUDPAddrPort(buf []byte, oob []byte) (
 func (S *SimConnection) WriteToUDPAddrPort(b []byte, addr netip.AddrPort) (int, error) {
 	//TODO implement me
 	S.Log.Debug("Message to be written", zap.String("connection id", S.Id), zap.Binary("msg", b), zap.String("target addr", addr.String()))
+	for S.Step == nil {
+
+	}
+	S.Log.Debug("Waiting for step")
+	<-S.Step
+	S.Log.Debug("Step received")
+
 	S.WriteTo <- SimPacket{B: b, Addr: addr}
 	return len(b), nil
 }
