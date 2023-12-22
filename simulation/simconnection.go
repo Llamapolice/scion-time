@@ -13,7 +13,6 @@ type SimConnection struct {
 	Id       string // maybe change to Int but start with string for easier debugging
 	ReadFrom chan SimPacket
 	WriteTo  chan SimPacket
-	Step     chan struct{}
 
 	// Following are temporary, might be nice for debugging, but might change
 	Network string
@@ -91,13 +90,9 @@ func (S *SimConnection) ReadMsgUDPAddrPort(buf []byte, oob []byte) (
 func (S *SimConnection) WriteToUDPAddrPort(b []byte, addr netip.AddrPort) (int, error) {
 	//TODO implement me
 	S.Log.Debug("Message to be written", zap.String("connection id", S.Id), zap.Binary("msg", b), zap.String("target addr", addr.String()))
-	for S.Step == nil {
-
+	for S.WriteTo == nil {
+		// Wait for main simulator routine to initialize channel
 	}
-	S.Log.Debug("Waiting for step")
-	<-S.Step
-	S.Log.Debug("Step received")
-
 	S.WriteTo <- SimPacket{B: b, Addr: addr}
 	return len(b), nil
 }
@@ -110,7 +105,6 @@ func (S *SimConnection) SetDeadline(t time.Time) error {
 func (S *SimConnection) LocalAddr() net.Addr {
 	//TODO implement me
 	return S.LAddr
-	panic("LocalAddr: implement me")
 }
 
 var _ netprovider.Connection = (*SimConnection)(nil)
