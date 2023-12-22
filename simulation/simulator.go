@@ -66,7 +66,9 @@ func RunSimulation(
 	simConnector.CallBack = simConnectionListener
 
 	// SCION Server 1:
-	ctx := context.Background()
+	//ctx := context.Background()
+	//ctx.Done()
+	ctx1, cancel1 := context.WithCancel(context.Background())
 	provider := ntske.NewProvider()
 
 	var localAddr snet.UDPAddr
@@ -77,9 +79,9 @@ func RunSimulation(
 
 	log.Info("Starting first server")
 	// With daemon addr
-	//server.StartSCIONServer(ctx, log, "10.1.1.11:30255", snet.CopyUDPAddr(localAddr.Host), 0, provider)
+	//server.StartSCIONServer(ctx1, log, "10.1.1.11:30255", snet.CopyUDPAddr(localAddr.Host), 0, provider)
 	// Without daemon addr
-	server.StartSCIONServer(ctx, log, "", snet.CopyUDPAddr(localAddr.Host), 0, provider)
+	server.StartSCIONServer(ctx1, log, "", snet.CopyUDPAddr(localAddr.Host), 0, provider)
 	server1Connection := <-simConnectionListener
 	server1Connection.Id = "server_1"
 	log.Debug("Simulator received connection of server 1")
@@ -92,7 +94,7 @@ func RunSimulation(
 	server1Connection.WriteTo = s1ReceiveFrom
 
 	// SCION Server 2:
-	ctx2 := context.Background()
+	ctx2, cancel2 := context.WithCancel(context.Background())
 	err = localAddr.Set("1-ff00:0:112,10.1.1.12") // Using testnet/gen-eh/ASff00_0_112/ts1-ff00_0_112-1.toml for now
 	if err != nil {
 		log.Fatal("Local address failed to parse")
@@ -114,7 +116,7 @@ func RunSimulation(
 
 	// Client
 	// try with SCION version
-	ctxClient := context.Background()
+	ctxClient, cancelClient := context.WithCancel(context.Background())
 	var laddr udp.UDPAddr
 	var raddr udp.UDPAddr
 	var laddrSNET snet.UDPAddr
@@ -130,7 +132,7 @@ func RunSimulation(
 	}
 	raddr = udp.UDPAddrFromSnet(&raddrSNET)
 	ntpcs := []*client.SCIONClient{
-		{DSCP: 0, InterleavedMode: true},
+		{DSCP: 0, InterleavedMode: false},
 	}
 	ps := []snet.Path{
 		path.Path{Src: laddrSNET.IA, Dst: raddrSNET.IA, DataplanePath: path.Empty{}, NextHop: raddrSNET.Host},
@@ -138,7 +140,8 @@ func RunSimulation(
 
 	go func() {
 		//_, err = client.MeasureClockOffsetIP(ctxClient, log, &client.IPClient{DSCP: 0, InterleavedMode: true}, laddrSNET.Host, raddrSNET.Host)
-		_, err := client.MeasureClockOffsetSCION(ctxClient, log, ntpcs, laddr, raddr, ps)
+		medianDuration, err := client.MeasureClockOffsetSCION(ctxClient, log, ntpcs, laddr, raddr, ps)
+		log.Debug("Median Duration measured by tool", zap.Duration("duration", medianDuration))
 		if err != nil {
 			log.Fatal("Tool had an error", zap.Error(err))
 		}
@@ -166,7 +169,7 @@ func RunSimulation(
 	log.Debug("Sending step")
 	s1step <- struct{}{}
 	server1Response := <-s1ReceiveFrom
-	log.Debug("Received response from server 1", zap.String("source addr", server1Response.Addr.String()))
+	log.Debug("Received response from server 1", zap.String("target addr", server1Response.Addr.String()))
 	// Forward response to client
 	cSendTo <- server1Response
 
@@ -176,6 +179,11 @@ func RunSimulation(
 		// Drop, corrupt, duplicate, kill, start, disconnect connections and instances as needed
 		condition = false
 	}
+
+	defer log.Debug("Canceled all contexts")
+	defer cancel1()
+	defer cancel2()
+	defer cancelClient()
 
 	select {}
 
