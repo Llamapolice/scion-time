@@ -70,7 +70,7 @@ func RunSimulation(
 	provider := ntske.NewProvider()
 
 	var localAddr snet.UDPAddr
-	err := localAddr.Set("1-ff00:0:111,10.1.1.11") // Using testnet/gen-eh/ASff00_0_111/ts1-ff00_0_111-1.toml for now
+	err := localAddr.Set("1-ff00:0:111,10.1.1.11:10123") // Using testnet/gen-eh/ASff00_0_111/ts1-ff00_0_111-1.toml for now
 	if err != nil {
 		log.Fatal("Local address failed to parse")
 	}
@@ -91,7 +91,7 @@ func RunSimulation(
 
 	// SCION Server 2:
 	ctx2, cancel2 := context.WithCancel(context.Background())
-	err = localAddr.Set("1-ff00:0:112,10.1.1.12") // Using testnet/gen-eh/ASff00_0_112/ts1-ff00_0_112-1.toml for now
+	err = localAddr.Set("1-ff00:0:112,10.1.1.12:10123") // Using testnet/gen-eh/ASff00_0_112/ts1-ff00_0_112-1.toml for now
 	if err != nil {
 		log.Fatal("Local address failed to parse")
 	}
@@ -129,7 +129,7 @@ func RunSimulation(
 		{DSCP: 0, InterleavedMode: false},
 	}
 	ps := []snet.Path{
-		path.Path{Src: laddrSNET.IA, Dst: raddrSNET.IA, DataplanePath: path.Empty{}, NextHop: raddrSNET.Host},
+		path.Path{Src: laddrSNET.IA, Dst: raddrSNET.IA, DataplanePath: path.Empty{}},
 	}
 
 	go func() {

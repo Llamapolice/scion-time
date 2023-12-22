@@ -92,6 +92,7 @@ func (S *SimConnection) WriteToUDPAddrPort(b []byte, addr netip.AddrPort) (int, 
 	S.Log.Debug("Message to be written", zap.String("connection id", S.Id), zap.Binary("msg", b), zap.String("target addr", addr.String()))
 	for S.WriteTo == nil {
 		// Wait for main simulator routine to initialize channel
+		time.Sleep(0)
 	}
 	S.WriteTo <- SimPacket{B: b, Addr: addr}
 	return len(b), nil
