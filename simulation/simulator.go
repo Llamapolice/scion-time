@@ -56,6 +56,9 @@ func RunSimulation(
 	log.Info("Starting simulation")
 
 	// Some logic to read a config file and fill a settings struct
+	log.Debug("Reading config file", zap.String("config location", configFile))
+	var cfg SimConfig
+	core.LoadConfig(&cfg, configFile)
 
 	// Some set up to build the simulated network and start instances
 	// Register some channels into the sims

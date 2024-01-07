@@ -3,7 +3,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"crypto/tls"
 	"encoding/hex"
@@ -19,7 +18,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/pelletier/go-toml/v2"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	"github.com/scionproto/scion/pkg/addr"
@@ -244,19 +242,6 @@ func (c *ntpReferenceClockSCION) MeasureClockOffset(ctx context.Context, log *za
 	return client.MeasureClockOffsetSCION(ctx, log, c.ntpcs[:], c.localAddr, c.remoteAddr, paths)
 }
 
-func loadConfig(configFile string) core.SvcConfig {
-	raw, err := os.ReadFile(configFile)
-	if err != nil {
-		log.Fatal("failed to load configuration", zap.Error(err))
-	}
-	var cfg core.SvcConfig
-	err = toml.NewDecoder(bytes.NewReader(raw)).DisallowUnknownFields().Decode(&cfg)
-	if err != nil {
-		log.Fatal("failed to decode configuration", zap.Error(err))
-	}
-	return cfg
-}
-
 func localAddress(cfg core.SvcConfig) *snet.UDPAddr {
 	if cfg.LocalAddr == "" {
 		log.Fatal("local_address not specified in config")
@@ -416,7 +401,8 @@ func copyIP(ip net.IP) net.IP {
 func runServer(configFile string) {
 	ctx := context.Background()
 
-	cfg := loadConfig(configFile)
+	var cfg core.SvcConfig
+	core.LoadConfig(&cfg, configFile)
 	localAddr := localAddress(cfg)
 	daemonAddr := daemonAddress(cfg)
 
@@ -460,7 +446,8 @@ func runServer(configFile string) {
 func runRelay(configFile string) {
 	ctx := context.Background()
 
-	cfg := loadConfig(configFile)
+	var cfg core.SvcConfig
+	core.LoadConfig(&cfg, configFile)
 	localAddr := localAddress(cfg)
 	daemonAddr := daemonAddress(cfg)
 
@@ -504,7 +491,8 @@ func runRelay(configFile string) {
 func runClient(configFile string) {
 	ctx := context.Background()
 
-	cfg := loadConfig(configFile)
+	var cfg core.SvcConfig
+	core.LoadConfig(&cfg, configFile)
 	localAddr := localAddress(cfg)
 
 	localAddr.Host.Port = 0
@@ -643,7 +631,8 @@ func runSCIONTool(daemonAddr, dispatcherMode string, localAddr, remoteAddr *snet
 }
 
 func runBenchmark(configFile string) {
-	cfg := loadConfig(configFile)
+	var cfg core.SvcConfig
+	core.LoadConfig(&cfg, configFile)
 	localAddr := localAddress(cfg)
 	daemonAddr := daemonAddress(cfg)
 	remoteAddr := remoteAddress(cfg)

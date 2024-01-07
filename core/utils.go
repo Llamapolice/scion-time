@@ -1,5 +1,13 @@
 package core
 
+import (
+	"bytes"
+	"github.com/pelletier/go-toml/v2"
+	"go.uber.org/zap"
+	"log"
+	"os"
+)
+
 type SvcConfig struct {
 	LocalAddr               string   `toml:"local_address,omitempty"`
 	DaemonAddr              string   `toml:"daemon_address,omitempty"`
@@ -13,4 +21,15 @@ type SvcConfig struct {
 	AuthModes               []string `toml:"auth_modes,omitempty"`
 	NTSKEInsecureSkipVerify bool     `toml:"ntske_insecure_skip_verify,omitempty"`
 	DSCP                    uint8    `toml:"dscp,omitempty"` // must be in range [0, 63]
+}
+
+func LoadConfig[T any](cfgStruct T, configFile string) { // T is pointer to config struct
+	raw, err := os.ReadFile(configFile)
+	if err != nil {
+		log.Fatal("failed to load configuration", zap.Error(err))
+	}
+	err = toml.NewDecoder(bytes.NewReader(raw)).DisallowUnknownFields().Decode(cfgStruct)
+	if err != nil {
+		log.Fatal("failed to decode configuration", zap.Error(err))
+	}
 }
