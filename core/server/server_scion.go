@@ -135,7 +135,7 @@ func runSCIONServer(ctx context.Context, log *zap.Logger, mtrcs *scionServerMetr
 		if err != nil {
 			oob = oob[:0]
 			rxt = timebase.Now()
-			log.Error("failed to read packet rx timestamp", zap.Error(err))
+			log.Error("failed to read packet rx timestamp from oob, falling back to local clock", zap.Error(err))
 		}
 		buf = buf[:n]
 		mtrcs.pktsReceived.Inc()

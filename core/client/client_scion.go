@@ -304,7 +304,7 @@ func (c *SCIONClient) measureClockOffsetSCION(ctx context.Context, log *zap.Logg
 	cTxTime1, id, err := netbase.ReadTXTimestamp(conn)
 	if err != nil || id != 0 {
 		cTxTime1 = timebase.Now()
-		log.Error("failed to read packet tx timestamp", zap.Error(err))
+		log.Error("failed to read packet tx timestamp, falling back to local clock", zap.Error(err))
 	}
 	mtrcs.reqsSent.Inc()
 	if interleaved {
@@ -338,7 +338,7 @@ func (c *SCIONClient) measureClockOffsetSCION(ctx context.Context, log *zap.Logg
 		cRxTime, err := udp.TimestampFromOOBData(oob)
 		if err != nil {
 			cRxTime = timebase.Now()
-			log.Error("failed to read packet rx timestamp", zap.Error(err))
+			log.Error("failed to read packet rx timestamp from oob, falling back to local clock", zap.Error(err))
 		}
 		buf = buf[:n]
 		mtrcs.pktsReceived.Inc()

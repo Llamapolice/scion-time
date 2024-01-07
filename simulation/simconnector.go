@@ -97,7 +97,7 @@ func (s *SimConnector) EnableTimestamping(n netprovider.Connection, localhostIfa
 	//TODO does this need more code?
 	s.log.Info("Enabling timestamping")
 	if _, ok := n.(*SimConnection); !ok {
-		s.log.Error("SimConnector method EnableTimestamping called on a non-simulated connection")
+		s.log.Fatal("SimConnector method EnableTimestamping called on a non-simulated connection")
 	}
 	return nil
 }
@@ -106,7 +106,7 @@ func (s *SimConnector) SetDSCP(n netprovider.Connection, dscp uint8) error {
 	//TODO implement me
 	sconn, ok := n.(*SimConnection)
 	if !ok {
-		s.log.Error("SimConnector method SetDSCP called on a non-simulated connection")
+		s.log.Fatal("SimConnector method SetDSCP called on a non-simulated connection")
 		return nil
 	}
 	sconn.DSCP = dscp // This is optional but might be useful for debugging later
@@ -114,9 +114,13 @@ func (s *SimConnector) SetDSCP(n netprovider.Connection, dscp uint8) error {
 }
 
 func (s *SimConnector) ReadTXTimestamp(n netprovider.Connection) (time.Time, uint32, error) {
-	//TODO implement me
 	// Just return error, upstreams will find another one
-	return time.Time{}, 0, SimConnectorError{errString: "this is a simulated connection, find another timestamp"}
+	sconn, ok := n.(*SimConnection)
+	if !ok {
+		s.log.Fatal("SimConnector method ReadTXTimestamp called on a non-simulated connection")
+		return time.Time{}, 0, nil
+	}
+	return time.Time{}, 0, SimConnectorError{errString: sconn.Id + " is a simulated connection, find another timestamp"}
 }
 
 func (s *SimConnector) ListenPacket(network string, address string) (netprovider.Connection, error) {

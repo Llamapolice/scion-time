@@ -149,6 +149,7 @@ func RunSimulation(
 	clientConnection.ReadFrom = cSendTo
 	clientConnection.WriteTo = cReceiveFrom
 
+	// Start communication from tool to server
 	toolMsg := <-cReceiveFrom
 	log.Debug("Received packet from tool", zap.String("target addr", toolMsg.Addr.String()))
 
