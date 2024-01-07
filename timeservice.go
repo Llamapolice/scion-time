@@ -7,9 +7,12 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/hex"
+	"example.com/scion-time/core"
 	"example.com/scion-time/core/netbase"
 	"example.com/scion-time/driver/networking"
+	"flag"
 	"fmt"
+	"github.com/mmcloughlin/profile"
 	"net"
 	"net/http"
 	"os"
@@ -59,21 +62,6 @@ const (
 
 	scionRefClockNumClient = 5
 )
-
-type svcConfig struct {
-	LocalAddr               string   `toml:"local_address,omitempty"`
-	DaemonAddr              string   `toml:"daemon_address,omitempty"`
-	RemoteAddr              string   `toml:"remote_address,omitempty"`
-	MBGReferenceClocks      []string `toml:"mbg_reference_clocks,omitempty"`
-	NTPReferenceClocks      []string `toml:"ntp_reference_clocks,omitempty"`
-	SCIONPeers              []string `toml:"scion_peers,omitempty"`
-	NTSKECertFile           string   `toml:"ntske_cert_file,omitempty"`
-	NTSKEKeyFile            string   `toml:"ntske_key_file,omitempty"`
-	NTSKEServerName         string   `toml:"ntske_server_name,omitempty"`
-	AuthModes               []string `toml:"auth_modes,omitempty"`
-	NTSKEInsecureSkipVerify bool     `toml:"ntske_insecure_skip_verify,omitempty"`
-	DSCP                    uint8    `toml:"dscp,omitempty"` // must be in range [0, 63]
-}
 
 type mbgReferenceClock struct {
 	dev string
@@ -255,12 +243,12 @@ func (c *ntpReferenceClockSCION) MeasureClockOffset(ctx context.Context, log *za
 	return client.MeasureClockOffsetSCION(ctx, log, c.ntpcs[:], c.localAddr, c.remoteAddr, paths)
 }
 
-func loadConfig(configFile string) svcConfig {
+func loadConfig(configFile string) core.SvcConfig {
 	raw, err := os.ReadFile(configFile)
 	if err != nil {
 		log.Fatal("failed to load configuration", zap.Error(err))
 	}
-	var cfg svcConfig
+	var cfg core.SvcConfig
 	err = toml.NewDecoder(bytes.NewReader(raw)).DisallowUnknownFields().Decode(&cfg)
 	if err != nil {
 		log.Fatal("failed to decode configuration", zap.Error(err))
@@ -268,7 +256,7 @@ func loadConfig(configFile string) svcConfig {
 	return cfg
 }
 
-func localAddress(cfg svcConfig) *snet.UDPAddr {
+func localAddress(cfg core.SvcConfig) *snet.UDPAddr {
 	if cfg.LocalAddr == "" {
 		log.Fatal("local_address not specified in config")
 	}
@@ -280,7 +268,7 @@ func localAddress(cfg svcConfig) *snet.UDPAddr {
 	return &localAddr
 }
 
-func remoteAddress(cfg svcConfig) *snet.UDPAddr {
+func remoteAddress(cfg core.SvcConfig) *snet.UDPAddr {
 	if cfg.RemoteAddr == "" {
 		log.Fatal("remote_address not specified in config")
 	}
@@ -292,18 +280,18 @@ func remoteAddress(cfg svcConfig) *snet.UDPAddr {
 	return &remoteAddr
 }
 
-func daemonAddress(cfg svcConfig) string {
+func daemonAddress(cfg core.SvcConfig) string {
 	return cfg.DaemonAddr
 }
 
-func dscp(cfg svcConfig) uint8 {
+func dscp(cfg core.SvcConfig) uint8 {
 	if cfg.DSCP > 63 {
 		log.Fatal("invalid differentiated services codepoint value specified in config")
 	}
 	return cfg.DSCP
 }
 
-func tlsConfig(cfg svcConfig) *tls.Config {
+func tlsConfig(cfg core.SvcConfig) *tls.Config {
 	if cfg.NTSKEServerName == "" || cfg.NTSKECertFile == "" || cfg.NTSKEKeyFile == "" {
 		log.Fatal("missing parameters in configuration for NTSKE server")
 	}
@@ -319,7 +307,7 @@ func tlsConfig(cfg svcConfig) *tls.Config {
 	}
 }
 
-func createClocks(cfg svcConfig, localAddr *snet.UDPAddr) (
+func createClocks(cfg core.SvcConfig, localAddr *snet.UDPAddr) (
 	refClocks, netClocks []client.ReferenceClock) {
 	dscp := dscp(cfg)
 
@@ -692,7 +680,7 @@ func runSCIONBenchmark(daemonAddr string, localAddr, remoteAddr *snet.UDPAddr, a
 	benchmark.RunSCIONBenchmark(daemonAddr, localAddr, remoteAddr, authModes, ntskeServer, log)
 }
 
-func runSimulation(seed int64) {
+func runSimulation(seed int64, configFile string) {
 	lclk := simulation.NewSimulationClock(seed, log)
 	timebase.RegisterClock(lclk)
 
@@ -702,7 +690,7 @@ func runSimulation(seed int64) {
 	lnet := simulation.NewSimConnector(log)
 	netbase.RegisterNetProvider(lnet)
 
-	simulation.RunSimulation(lclk, lcrypt, lnet, log)
+	simulation.RunSimulation(configFile, lclk, lcrypt, lnet, log)
 }
 
 func runDRKeyDemo(daemonAddr string, serverMode bool, serverAddr, clientAddr *snet.UDPAddr) {
@@ -763,163 +751,176 @@ func exitWithUsage() {
 }
 
 func main() {
-	initLogger(true)
-	runSimulation(5)
+	var (
+		verbose                 bool
+		configFile              string
+		daemonAddr              string
+		localAddr               snet.UDPAddr
+		remoteAddrStr           string
+		dispatcherMode          string
+		drkeyMode               string
+		drkeyServerAddr         snet.UDPAddr
+		drkeyClientAddr         snet.UDPAddr
+		dscp                    uint
+		seed                    int64
+		authModesStr            string
+		ntskeInsecureSkipVerify bool
+		profileCPU              bool
+	)
 
-	// Keep this on the side for now for easier running
-	//var (
-	//	verbose                 bool
-	//	configFile              string
-	//	daemonAddr              string
-	//	localAddr               snet.UDPAddr
-	//	remoteAddrStr           string
-	//	dispatcherMode          string
-	//	drkeyMode               string
-	//	drkeyServerAddr         snet.UDPAddr
-	//	drkeyClientAddr         snet.UDPAddr
-	//	dscp                    uint
-	//	authModesStr            string
-	//	ntskeInsecureSkipVerify bool
-	//	profileCPU              bool
-	//)
-	//
-	//serverFlags := flag.NewFlagSet("server", flag.ExitOnError)
-	//relayFlags := flag.NewFlagSet("relay", flag.ExitOnError)
-	//clientFlags := flag.NewFlagSet("client", flag.ExitOnError)
-	//toolFlags := flag.NewFlagSet("tool", flag.ExitOnError)
-	//benchmarkFlags := flag.NewFlagSet("benchmark", flag.ExitOnError)
-	//drkeyFlags := flag.NewFlagSet("drkey", flag.ExitOnError)
-	//
-	//serverFlags.BoolVar(&verbose, "verbose", false, "Verbose logging")
-	//serverFlags.StringVar(&configFile, "config", "", "Config file")
-	//serverFlags.BoolVar(&profileCPU, "profile-cpu", false, "Enable profiling")
-	//
-	//relayFlags.BoolVar(&verbose, "verbose", false, "Verbose logging")
-	//relayFlags.StringVar(&configFile, "config", "", "Config file")
-	//
-	//clientFlags.BoolVar(&verbose, "verbose", false, "Verbose logging")
-	//clientFlags.StringVar(&configFile, "config", "", "Config file")
-	//
-	//toolFlags.BoolVar(&verbose, "verbose", false, "Verbose logging")
-	//toolFlags.StringVar(&daemonAddr, "daemon", "", "Daemon address")
-	//toolFlags.StringVar(&dispatcherMode, "dispatcher", "", "Dispatcher mode")
-	//toolFlags.Var(&localAddr, "local", "Local address")
-	//toolFlags.StringVar(&remoteAddrStr, "remote", "", "Remote address")
-	//toolFlags.UintVar(&dscp, "dscp", 0, "Differentiated services codepoint, must be in range [0, 63]")
-	//toolFlags.StringVar(&authModesStr, "auth", "", "Authentication modes")
-	//toolFlags.BoolVar(&ntskeInsecureSkipVerify, "ntske-insecure-skip-verify", false, "Skip NTSKE verification")
-	//
-	//benchmarkFlags.BoolVar(&verbose, "verbose", false, "Verbose logging")
-	//benchmarkFlags.StringVar(&configFile, "config", "", "Config file")
-	//
-	//drkeyFlags.BoolVar(&verbose, "verbose", false, "Verbose logging")
-	//drkeyFlags.StringVar(&daemonAddr, "daemon", "", "Daemon address")
-	//drkeyFlags.StringVar(&drkeyMode, "mode", "", "Mode")
-	//drkeyFlags.Var(&drkeyServerAddr, "server", "Server address")
-	//drkeyFlags.Var(&drkeyClientAddr, "client", "Client address")
-	//
-	//if len(os.Args) < 2 {
-	//	exitWithUsage()
-	//}
-	//
-	//switch os.Args[1] {
-	//case serverFlags.Name():
-	//	err := serverFlags.Parse(os.Args[2:])
-	//	if err != nil || serverFlags.NArg() != 0 {
-	//		exitWithUsage()
-	//	}
-	//	if configFile == "" {
-	//		exitWithUsage()
-	//	}
-	//	if profileCPU {
-	//		defer profile.Start(profile.CPUProfile).Stop()
-	//	}
-	//	initLogger(verbose)
-	//	runServer(configFile)
-	//case relayFlags.Name():
-	//	err := relayFlags.Parse(os.Args[2:])
-	//	if err != nil || relayFlags.NArg() != 0 {
-	//		exitWithUsage()
-	//	}
-	//	if configFile == "" {
-	//		exitWithUsage()
-	//	}
-	//	initLogger(verbose)
-	//	runRelay(configFile)
-	//case clientFlags.Name():
-	//	err := clientFlags.Parse(os.Args[2:])
-	//	if err != nil || clientFlags.NArg() != 0 {
-	//		exitWithUsage()
-	//	}
-	//	if configFile == "" {
-	//		exitWithUsage()
-	//	}
-	//	initLogger(verbose)
-	//	runClient(configFile)
-	//case toolFlags.Name():
-	//	err := toolFlags.Parse(os.Args[2:])
-	//	if err != nil || toolFlags.NArg() != 0 {
-	//		exitWithUsage()
-	//	}
-	//	var remoteAddr snet.UDPAddr
-	//	err = remoteAddr.Set(remoteAddrStr)
-	//	if err != nil {
-	//		exitWithUsage()
-	//	}
-	//	if dscp > 63 {
-	//		exitWithUsage()
-	//	}
-	//	authModes := strings.Split(authModesStr, ",")
-	//	for i := range authModes {
-	//		authModes[i] = strings.TrimSpace(authModes[i])
-	//	}
-	//	if !remoteAddr.IA.IsZero() {
-	//		if dispatcherMode == "" {
-	//			dispatcherMode = dispatcherModeExternal
-	//		} else if dispatcherMode != dispatcherModeExternal &&
-	//			dispatcherMode != dispatcherModeInternal {
-	//			exitWithUsage()
-	//		}
-	//		ntskeServer := ntskeServerFromRemoteAddr(remoteAddrStr)
-	//		initLogger(verbose)
-	//		runSCIONTool(daemonAddr, dispatcherMode, &localAddr, &remoteAddr, uint8(dscp),
-	//			authModes, ntskeServer, ntskeInsecureSkipVerify)
-	//	} else {
-	//		if daemonAddr != "" {
-	//			exitWithUsage()
-	//		}
-	//		if dispatcherMode != "" {
-	//			exitWithUsage()
-	//		}
-	//		ntskeServer := ntskeServerFromRemoteAddr(remoteAddrStr)
-	//		initLogger(verbose)
-	//		runIPTool(&localAddr, &remoteAddr, uint8(dscp),
-	//			authModes, ntskeServer, ntskeInsecureSkipVerify)
-	//	}
-	//case benchmarkFlags.Name():
-	//	err := benchmarkFlags.Parse(os.Args[2:])
-	//	if err != nil || benchmarkFlags.NArg() != 0 {
-	//		exitWithUsage()
-	//	}
-	//	if configFile == "" {
-	//		exitWithUsage()
-	//	}
-	//	initLogger(verbose)
-	//	runBenchmark(configFile)
-	//case drkeyFlags.Name():
-	//	err := drkeyFlags.Parse(os.Args[2:])
-	//	if err != nil || drkeyFlags.NArg() != 0 {
-	//		exitWithUsage()
-	//	}
-	//	if drkeyMode != "server" && drkeyMode != "client" {
-	//		exitWithUsage()
-	//	}
-	//	serverMode := drkeyMode == "server"
-	//	initLogger(verbose)
-	//	runDRKeyDemo(daemonAddr, serverMode, &drkeyServerAddr, &drkeyClientAddr)
-	//case "x":
-	//	runX()
-	//default:
-	//	exitWithUsage()
-	//}
+	serverFlags := flag.NewFlagSet("server", flag.ExitOnError)
+	relayFlags := flag.NewFlagSet("relay", flag.ExitOnError)
+	clientFlags := flag.NewFlagSet("client", flag.ExitOnError)
+	toolFlags := flag.NewFlagSet("tool", flag.ExitOnError)
+	benchmarkFlags := flag.NewFlagSet("benchmark", flag.ExitOnError)
+	drkeyFlags := flag.NewFlagSet("drkey", flag.ExitOnError)
+	simulationFlags := flag.NewFlagSet("simulation", flag.ExitOnError)
+
+	serverFlags.BoolVar(&verbose, "verbose", false, "Verbose logging")
+	serverFlags.StringVar(&configFile, "config", "", "Config file")
+	serverFlags.BoolVar(&profileCPU, "profile-cpu", false, "Enable profiling")
+
+	relayFlags.BoolVar(&verbose, "verbose", false, "Verbose logging")
+	relayFlags.StringVar(&configFile, "config", "", "Config file")
+
+	clientFlags.BoolVar(&verbose, "verbose", false, "Verbose logging")
+	clientFlags.StringVar(&configFile, "config", "", "Config file")
+
+	toolFlags.BoolVar(&verbose, "verbose", false, "Verbose logging")
+	toolFlags.StringVar(&daemonAddr, "daemon", "", "Daemon address")
+	toolFlags.StringVar(&dispatcherMode, "dispatcher", "", "Dispatcher mode")
+	toolFlags.Var(&localAddr, "local", "Local address")
+	toolFlags.StringVar(&remoteAddrStr, "remote", "", "Remote address")
+	toolFlags.UintVar(&dscp, "dscp", 0, "Differentiated services codepoint, must be in range [0, 63]")
+	toolFlags.StringVar(&authModesStr, "auth", "", "Authentication modes")
+	toolFlags.BoolVar(&ntskeInsecureSkipVerify, "ntske-insecure-skip-verify", false, "Skip NTSKE verification")
+
+	benchmarkFlags.BoolVar(&verbose, "verbose", false, "Verbose logging")
+	benchmarkFlags.StringVar(&configFile, "config", "", "Config file")
+
+	drkeyFlags.BoolVar(&verbose, "verbose", false, "Verbose logging")
+	drkeyFlags.StringVar(&daemonAddr, "daemon", "", "Daemon address")
+	drkeyFlags.StringVar(&drkeyMode, "mode", "", "Mode")
+	drkeyFlags.Var(&drkeyServerAddr, "server", "Server address")
+	drkeyFlags.Var(&drkeyClientAddr, "client", "Client address")
+
+	simulationFlags.StringVar(&configFile, "config", "", "Simulation config file")
+	simulationFlags.Int64Var(&seed, "seed", 5, "Seed for the pseudorandom generation, defaults to 5")
+
+	if len(os.Args) < 2 {
+		exitWithUsage()
+	}
+
+	switch os.Args[1] {
+	case simulationFlags.Name():
+		err := simulationFlags.Parse(os.Args[2:])
+		if err != nil || simulationFlags.NArg() != 0 {
+			fmt.Println("NArg not 0")
+			exitWithUsage()
+		}
+		if configFile == "" {
+			fmt.Println("configFile empty?")
+			exitWithUsage()
+		}
+		initLogger(true)
+		runSimulation(seed, configFile)
+	case serverFlags.Name():
+		err := serverFlags.Parse(os.Args[2:])
+		if err != nil || serverFlags.NArg() != 0 {
+			exitWithUsage()
+		}
+		if configFile == "" {
+			exitWithUsage()
+		}
+		if profileCPU {
+			defer profile.Start(profile.CPUProfile).Stop()
+		}
+		initLogger(verbose)
+		runServer(configFile)
+	case relayFlags.Name():
+		err := relayFlags.Parse(os.Args[2:])
+		if err != nil || relayFlags.NArg() != 0 {
+			exitWithUsage()
+		}
+		if configFile == "" {
+			exitWithUsage()
+		}
+		initLogger(verbose)
+		runRelay(configFile)
+	case clientFlags.Name():
+		err := clientFlags.Parse(os.Args[2:])
+		if err != nil || clientFlags.NArg() != 0 {
+			exitWithUsage()
+		}
+		if configFile == "" {
+			exitWithUsage()
+		}
+		initLogger(verbose)
+		runClient(configFile)
+	case toolFlags.Name():
+		err := toolFlags.Parse(os.Args[2:])
+		if err != nil || toolFlags.NArg() != 0 {
+			exitWithUsage()
+		}
+		var remoteAddr snet.UDPAddr
+		err = remoteAddr.Set(remoteAddrStr)
+		if err != nil {
+			exitWithUsage()
+		}
+		if dscp > 63 {
+			exitWithUsage()
+		}
+		authModes := strings.Split(authModesStr, ",")
+		for i := range authModes {
+			authModes[i] = strings.TrimSpace(authModes[i])
+		}
+		if !remoteAddr.IA.IsZero() {
+			if dispatcherMode == "" {
+				dispatcherMode = dispatcherModeExternal
+			} else if dispatcherMode != dispatcherModeExternal &&
+				dispatcherMode != dispatcherModeInternal {
+				exitWithUsage()
+			}
+			ntskeServer := ntskeServerFromRemoteAddr(remoteAddrStr)
+			initLogger(verbose)
+			runSCIONTool(daemonAddr, dispatcherMode, &localAddr, &remoteAddr, uint8(dscp),
+				authModes, ntskeServer, ntskeInsecureSkipVerify)
+		} else {
+			if daemonAddr != "" {
+				exitWithUsage()
+			}
+			if dispatcherMode != "" {
+				exitWithUsage()
+			}
+			ntskeServer := ntskeServerFromRemoteAddr(remoteAddrStr)
+			initLogger(verbose)
+			runIPTool(&localAddr, &remoteAddr, uint8(dscp),
+				authModes, ntskeServer, ntskeInsecureSkipVerify)
+		}
+	case benchmarkFlags.Name():
+		err := benchmarkFlags.Parse(os.Args[2:])
+		if err != nil || benchmarkFlags.NArg() != 0 {
+			exitWithUsage()
+		}
+		if configFile == "" {
+			exitWithUsage()
+		}
+		initLogger(verbose)
+		runBenchmark(configFile)
+	case drkeyFlags.Name():
+		err := drkeyFlags.Parse(os.Args[2:])
+		if err != nil || drkeyFlags.NArg() != 0 {
+			exitWithUsage()
+		}
+		if drkeyMode != "server" && drkeyMode != "client" {
+			exitWithUsage()
+		}
+		serverMode := drkeyMode == "server"
+		initLogger(verbose)
+		runDRKeyDemo(daemonAddr, serverMode, &drkeyServerAddr, &drkeyClientAddr)
+	case "x":
+		runX()
+	default:
+		exitWithUsage()
+	}
 }

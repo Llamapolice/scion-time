@@ -5,6 +5,7 @@ import (
 	"example.com/scion-time/base/cryptobase"
 	"example.com/scion-time/base/netprovider"
 	"example.com/scion-time/base/timebase"
+	"example.com/scion-time/core"
 	"example.com/scion-time/core/client"
 	"example.com/scion-time/core/server"
 	"example.com/scion-time/net/ntske"
@@ -16,10 +17,10 @@ import (
 )
 
 type SimConfig struct {
-	// TODO, just an example for now
-	instances             []instance
-	connections           [][]connection
-	maxSimulationDuration time.Duration
+	// TODO, WIP
+	Servers []core.SvcConfig `toml:"servers"`
+	Relays  []core.SvcConfig `toml:"relays"`
+	Clients []core.SvcConfig `toml:"clients"`
 }
 
 type instance struct {
@@ -46,6 +47,7 @@ type connection struct {
 }
 
 func RunSimulation(
+	configFile string,
 	lclk timebase.LocalClock,
 	lcrypt cryptobase.CryptoProvider,
 	lnet netprovider.ConnProvider,
@@ -69,6 +71,12 @@ func RunSimulation(
 	ctx1, cancel1 := context.WithCancel(context.Background())
 	provider := ntske.NewProvider()
 
+	//localRefClks := []string{"/sim/simClk"}
+	//ntpRefClks := []string{}
+	//SCIONPeers := []string{"1-ff00:0:111,10.1.1.11:10123"}
+	//
+	//
+
 	var localAddr snet.UDPAddr
 	err := localAddr.Set("1-ff00:0:111,10.1.1.11:10123") // Using testnet/gen-eh/ASff00_0_111/ts1-ff00_0_111-1.toml for now
 	if err != nil {
@@ -79,7 +87,7 @@ func RunSimulation(
 	// With daemon addr
 	//server.StartSCIONServer(ctx1, log, "10.1.1.11:30255", snet.CopyUDPAddr(localAddr.Host), 0, provider)
 	// Without daemon addr
-	server.StartSCIONServer(ctx1, log, "", snet.CopyUDPAddr(localAddr.Host), 0, provider)
+	server.StartSCIONServer(ctx1, log, "", snet.CopyUDPAddr(localAddr.Host), 63, provider)
 	server1Connection := <-simConnectionListener
 	server1Connection.Id = "server_1"
 	log.Debug("Simulator received connection of server 1")
@@ -98,7 +106,7 @@ func RunSimulation(
 
 	log.Info("Starting second server")
 	//server.StartSCIONServer(ctx2, log, "10.1.1.12:30255", snet.CopyUDPAddr(localAddr.Host), 0, provider)
-	server.StartSCIONServer(ctx2, log, "", snet.CopyUDPAddr(localAddr.Host), 0, provider)
+	server.StartSCIONServer(ctx2, log, "", snet.CopyUDPAddr(localAddr.Host), 63, provider)
 	server2Connection := <-simConnectionListener
 	server2Connection.Id = "server_2"
 	log.Debug("Simulator received connection of server 2")
