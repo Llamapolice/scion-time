@@ -2,25 +2,28 @@ package simulation
 
 import (
 	"go.uber.org/zap"
+	"math"
 	"time"
 
 	"example.com/scion-time/base/timebase"
 )
 
 type SimClock struct {
-	seed int64 // still TODO if this is needed
-	log  *zap.Logger
+	seed  int64 // still TODO if this is needed
+	log   *zap.Logger
+	epoch uint64
+	time  time.Time
 
-	counter int // See Now() below
+	counter int // See Now() below, temporary hack to stop unlimited execution
 }
 
 func NewSimulationClock(seed int64, log *zap.Logger) *SimClock {
-	return &SimClock{seed: seed, log: log, counter: 0}
+	return &SimClock{seed: seed, log: log, counter: 0, time: time.Unix(0, 0)}
 }
 
 func (c *SimClock) Epoch() uint64 {
 	//TODO implement me
-	panic("SimClock.Epoch() implement me")
+	return c.epoch
 }
 
 func (c *SimClock) Now() time.Time {
@@ -29,11 +32,10 @@ func (c *SimClock) Now() time.Time {
 		panic("Hard cutoff point reached")
 	}
 	c.counter++
-
-	var s int64 = 0
-	var ns int64 = 0
-	c.log.Debug("Time is now", zap.Int64("s", s), zap.Int64("ns", ns))
-	return time.Unix(s, ns)
+	var ns int64 = c.time.UnixNano()
+	c.time = c.time.Add(time.Duration(1e9))
+	c.log.Debug("Time is now", zap.Int64("ns", ns))
+	return time.Unix(0, ns)
 }
 
 func (c *SimClock) MaxDrift(duration time.Duration) time.Duration {
@@ -43,7 +45,13 @@ func (c *SimClock) MaxDrift(duration time.Duration) time.Duration {
 
 func (c *SimClock) Step(offset time.Duration) {
 	//TODO implement me
-	panic("SimClock.Step(): implement me")
+
+	// epoch part copied from sysclk_linux.go, not 100% what that does but probably not necessary
+	if c.epoch == math.MaxUint64 {
+		c.log.Error("SimClock.Step() has been called MaxUint64 times, should never be the case")
+		panic("epoch overflow")
+	}
+	c.epoch++
 }
 
 func (c *SimClock) Adjust(offset, duration time.Duration, frequency float64) {
