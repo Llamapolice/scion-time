@@ -81,10 +81,10 @@ func handleKeyExchangeQUIC(log *zap.Logger, conn quic.Connection, localPort int,
 	return nil
 }
 
-func runNTSKEServerQUIC(ctx context.Context, log *zap.Logger, listener *quic.Listener, localPort int, provider *ntske.Provider) {
+func runNTSKEServerQUIC(ctx context.Context, log *zap.Logger, listener *scion.QUICListener, localPort int, provider *ntske.Provider) {
 	defer listener.Close()
 	for {
-		conn, err := ntske.AcceptQUICConn(context.Background(), listener)
+		conn, err := listener.Accept(ctx)
 		if err != nil {
 			log.Info("failed to accept connection", zap.Error(err))
 			continue

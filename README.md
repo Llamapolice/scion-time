@@ -27,7 +27,7 @@ In Proceedings of the Symposium on Reliable Distributed Systems (SRDS) 2022.
 
 ## Running a simple IP-based server
 
-Reference platform: Ubuntu 22.04 LTS, Go 1.21.2; see [below](https://github.com/marcfrei/scion-time/edit/main/README.md#installing-prerequisites-for-a-scion-test-environment).
+Reference platform: Ubuntu 22.04 LTS, Go 1.21.5; see [below](https://github.com/marcfrei/scion-time/edit/main/README.md#installing-prerequisites-for-a-scion-test-environment).
 
 ```bash
 cd ~
@@ -73,10 +73,10 @@ On x86-64:
 
 ```bash
 sudo rm -rf /usr/local/go
-curl -LO https://golang.org/dl/go1.21.2.linux-amd64.tar.gz
-echo "f5414a770e5e11c6e9674d4cd4dd1f4f630e176d1828d3427ea8ca4211eee90d go1.21.2.linux-amd64.tar.gz" | sha256sum -c
-sudo tar -C /usr/local -xzf go1.21.2.linux-amd64.tar.gz
-rm go1.21.2.linux-amd64.tar.gz
+curl -LO https://golang.org/dl/go1.21.5.linux-amd64.tar.gz
+echo "e2bc0b3e4b64111ec117295c088bde5f00eeed1567999ff77bc859d7df70078e go1.21.5.linux-amd64.tar.gz" | sha256sum -c
+sudo tar -C /usr/local -xzf go1.21.5.linux-amd64.tar.gz
+rm go1.21.5.linux-amd64.tar.gz
 echo >> .bash_profile
 echo 'export PATH=$PATH:/usr/local/go/bin' >> .bash_profile
 source ~/.bash_profile
@@ -87,10 +87,10 @@ On ARM64:
 
 ```bash
 sudo rm -rf /usr/local/go
-curl -LO https://golang.org/dl/go1.21.2.linux-arm64.tar.gz
-echo "23e208ca44a3cb46cd4308e48a27c714ddde9c8c34f2e4211dbca95b6d456554 go1.21.2.linux-arm64.tar.gz" | sha256sum -c
-sudo tar -C /usr/local -xzf go1.21.2.linux-arm64.tar.gz
-rm go1.21.2.linux-arm64.tar.gz
+curl -LO https://golang.org/dl/go1.21.5.linux-arm64.tar.gz
+echo "841cced7ecda9b2014f139f5bab5ae31785f35399f236b8b3e75dff2a2978d96 go1.21.5.linux-arm64.tar.gz" | sha256sum -c
+sudo tar -C /usr/local -xzf go1.21.5.linux-arm64.tar.gz
+rm go1.21.5.linux-arm64.tar.gz
 echo >> .bash_profile
 echo 'export PATH=$PATH:/usr/local/go/bin' >> .bash_profile
 source ~/.bash_profile
@@ -108,7 +108,7 @@ echo 'export SCION_ROOT=~/scion' >> ~/.bash_profile # Change this path if necces
 source ~/.bash_profile
 
 cd $SCION_ROOT
-rm -rf bin/*
+git checkout v0.10.0
 go build -o ./bin/ ./control/cmd/control
 go build -o ./bin/ ./daemon/cmd/daemon
 go build -o ./bin/ ./dispatcher/cmd/dispatcher

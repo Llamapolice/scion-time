@@ -6,7 +6,7 @@ import matplotlib.pyplot
 import pandas
 import sys
 
-log = pandas.read_csv(sys.argv[1], names=["t", "off", "rtd"])
+log = pandas.read_csv(sys.argv[1], names=["t", "off", "_"])
 x = [dateutil.parser.isoparse(x) for x in log["t"]]
 y = [float(y) for y in log["off"]]
 
@@ -15,7 +15,7 @@ ax = matplotlib.pyplot.gca()
 
 ax.plot(x, y)
 
-ax.set_ylim(-0.1, 0.1)
+ax.set_ylim(-0.0001, 0.0001)
 ax.set_ylabel(r'Offset (s)')
 ax.set_xlabel(r'Time')
 

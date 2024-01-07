@@ -7,7 +7,6 @@ import (
 	"errors"
 	"net"
 
-	"github.com/quic-go/quic-go"
 	"go.uber.org/zap"
 
 	"github.com/scionproto/scion/pkg/daemon"
@@ -18,11 +17,6 @@ import (
 	"example.com/scion-time/net/scion"
 	"example.com/scion-time/net/udp"
 )
-
-// AcceptQUICConn accepts an incoming QUIC connection from a quic.Listener.
-func AcceptQUICConn(ctx context.Context, l *quic.Listener) (quic.Connection, error) {
-	return l.Accept(ctx)
-}
 
 func dialQUIC(log *zap.Logger, localAddr, remoteAddr udp.UDPAddr, daemonAddr string, config *tls.Config) (*scion.QUICConnection, Data, error) {
 	config.NextProtos = []string{alpn}
