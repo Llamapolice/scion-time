@@ -1,10 +1,10 @@
 [[servers]]
 local_address = "1-ff00:0:111,10.1.1.11:10123"
-daemon_address = "10.1.1.11:30255"
+daemon_address =  "" # empty for now, was "10.1.1.11:30255"
 
 mbg_reference_clocks = ["/sim/simRefClk"]
 ntp_reference_clocks = []
-scion_peers = ["1-ff00:0:112,10.1.1.12:10123"]
+scion_peers = ["1-ff00:0:112,10.1.1.12"]
 auth_modes = ["spao"]
 
 ntske_cert_file = "testnet/gen/tls.crt"
@@ -14,8 +14,8 @@ ntske_server_name = "localhost"
 dscp = 63
 
 [[servers]]
-local_address = "1-ff00:0:112,10.1.1.12:10123"
-daemon_address = "10.1.1.12:30255"
+local_address = "1-ff00:0:112,10.1.1.12"
+daemon_address = "" # empty for now, was "10.1.1.12:30255"
 
 mbg_reference_clocks = ["/sim/simRefClk"]
 ntp_reference_clocks = []

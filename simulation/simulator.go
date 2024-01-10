@@ -8,6 +8,7 @@ import (
 	"example.com/scion-time/core"
 	"example.com/scion-time/core/client"
 	"example.com/scion-time/core/server"
+	"example.com/scion-time/net/ntp"
 	"example.com/scion-time/net/ntske"
 	"example.com/scion-time/net/udp"
 	"github.com/scionproto/scion/pkg/snet"
@@ -16,11 +17,20 @@ import (
 	"time"
 )
 
-type SimConfig struct {
+type SimConfigFile struct {
 	// TODO, WIP
 	Servers []core.SvcConfig `toml:"servers"`
 	Relays  []core.SvcConfig `toml:"relays"`
 	Clients []core.SvcConfig `toml:"clients"`
+}
+
+type Server struct {
+	Id          string
+	Ctx         context.Context
+	ReceiveFrom chan SimPacket
+	SendTo      chan SimPacket
+	Conn        *SimConnection
+	Provider    *ntske.Provider
 }
 
 type instance struct {
@@ -46,6 +56,17 @@ type connection struct {
 	maxLatency                      time.Duration
 }
 
+func newServer() Server {
+	return Server{
+		Id:          "sim_server_",
+		Ctx:         context.Background(),
+		ReceiveFrom: make(chan SimPacket),
+		SendTo:      make(chan SimPacket),
+		Conn:        &SimConnection{},
+		Provider:    ntske.NewProvider(),
+	}
+}
+
 func RunSimulation(
 	configFile string,
 	lclk timebase.LocalClock,
@@ -57,7 +78,7 @@ func RunSimulation(
 
 	// Some logic to read a config file and fill a settings struct
 	log.Debug("Reading config file", zap.String("config location", configFile))
-	var cfg SimConfig
+	var cfg SimConfigFile
 	core.LoadConfig(&cfg, configFile)
 
 	// Some set up to build the simulated network and start instances
@@ -70,54 +91,78 @@ func RunSimulation(
 	}
 	simConnector.CallBack = simConnectionListener
 
-	// SCION Server 1:
-	ctx1, cancel1 := context.WithCancel(context.Background())
-	provider := ntske.NewProvider()
+	simServers := make([]Server, len(cfg.Servers))
 
-	//localRefClks := []string{"/sim/simClk"}
-	//ntpRefClks := []string{}
-	//SCIONPeers := []string{"1-ff00:0:111,10.1.1.11:10123"}
-	//
-	//
+	for i, simServer := range cfg.Servers {
+		tmp := newServer()
+		tmp.Id = tmp.Id + string(rune(i))
+		var localAddr snet.UDPAddr
+		err := localAddr.Set(simServer.LocalAddr)
+		if err != nil {
+			log.Fatal("Local address failed to parse", zap.String("id of server", tmp.Id))
+		}
+		localAddr.Host.Port = ntp.ServerPortSCION
+		log.Info("Starting server", zap.Int("index", i))
+		server.StartSCIONServer(tmp.Ctx, log, simServer.DaemonAddr, snet.CopyUDPAddr(localAddr.Host), simServer.DSCP, tmp.Provider)
 
-	var localAddr snet.UDPAddr
-	err := localAddr.Set("1-ff00:0:111,10.1.1.11:10123") // Using testnet/gen-eh/ASff00_0_111/ts1-ff00_0_111-1.toml for now
-	if err != nil {
-		log.Fatal("Local address failed to parse")
+		tmpConn := <-simConnectionListener
+		tmp.Conn = tmpConn
+		tmp.Conn.Id = tmp.Id + "_conn"
+		log.Debug("Simulator received connection", zap.String("server id", tmp.Id), zap.String("connection id", tmp.Conn.Id))
+		tmp.Conn.ReadFrom = tmp.SendTo
+		tmp.Conn.WriteTo = tmp.ReceiveFrom
+
+		simServers[i] = tmp
 	}
 
-	log.Info("Starting first server")
-	// With daemon addr
-	//server.StartSCIONServer(ctx1, log, "10.1.1.11:30255", snet.CopyUDPAddr(localAddr.Host), 0, provider)
-	// Without daemon addr
-	server.StartSCIONServer(ctx1, log, "", snet.CopyUDPAddr(localAddr.Host), 63, provider)
-	server1Connection := <-simConnectionListener
-	server1Connection.Id = "server_1"
-	log.Debug("Simulator received connection of server 1")
-
-	s1ReceiveFrom := make(chan SimPacket)
-	s1SendTo := make(chan SimPacket)
-	server1Connection.ReadFrom = s1SendTo
-	server1Connection.WriteTo = s1ReceiveFrom
-
-	// SCION Server 2:
-	ctx2, cancel2 := context.WithCancel(context.Background())
-	err = localAddr.Set("1-ff00:0:112,10.1.1.12:10123") // Using testnet/gen-eh/ASff00_0_112/ts1-ff00_0_112-1.toml for now
-	if err != nil {
-		log.Fatal("Local address failed to parse")
-	}
-
-	log.Info("Starting second server")
-	//server.StartSCIONServer(ctx2, log, "10.1.1.12:30255", snet.CopyUDPAddr(localAddr.Host), 0, provider)
-	server.StartSCIONServer(ctx2, log, "", snet.CopyUDPAddr(localAddr.Host), 63, provider)
-	server2Connection := <-simConnectionListener
-	server2Connection.Id = "server_2"
-	log.Debug("Simulator received connection of server 2")
-
-	s2ReceiveFrom := make(chan SimPacket)
-	s2SendTo := make(chan SimPacket)
-	server2Connection.ReadFrom = s2SendTo
-	server2Connection.WriteTo = s2ReceiveFrom
+	//// SCION Server 1:
+	//ctx1, cancel1 := context.WithCancel(context.Background())
+	//provider := ntske.NewProvider()
+	//
+	////localRefClks := []string{"/sim/simClk"}
+	////ntpRefClks := []string{}
+	////SCIONPeers := []string{"1-ff00:0:111,10.1.1.11:10123"}
+	////
+	////
+	//
+	//var localAddr snet.UDPAddr
+	//err := localAddr.Set("1-ff00:0:111,10.1.1.11:10123") // Using testnet/gen-eh/ASff00_0_111/ts1-ff00_0_111-1.toml for now
+	//if err != nil {
+	//	log.Fatal("Local address failed to parse")
+	//}
+	//
+	//log.Info("Starting first server")
+	//// With daemon addr
+	////server.StartSCIONServer(ctx1, log, "10.1.1.11:30255", snet.CopyUDPAddr(localAddr.Host), 0, provider)
+	//// Without daemon addr
+	//server.StartSCIONServer(ctx1, log, "", snet.CopyUDPAddr(localAddr.Host), 63, provider)
+	//server1Connection := <-simConnectionListener
+	//server1Connection.Id = "server_1"
+	//log.Debug("Simulator received connection of server 1")
+	//
+	//s1ReceiveFrom := make(chan SimPacket)
+	//s1SendTo := make(chan SimPacket)
+	//server1Connection.ReadFrom = s1SendTo
+	//server1Connection.WriteTo = s1ReceiveFrom
+	//
+	//// SCION Server 2:
+	//ctx2, cancel2 := context.WithCancel(context.Background())
+	//err = localAddr.Set("1-ff00:0:112,10.1.1.12:10123") // Using testnet/gen-eh/ASff00_0_112/ts1-ff00_0_112-1.toml for now
+	//if err != nil {
+	//	log.Fatal("Local address failed to parse")
+	//}
+	//
+	//log.Info("Starting second server")
+	////server.StartSCIONServer(ctx2, log, "10.1.1.12:30255", snet.CopyUDPAddr(localAddr.Host), 0, provider)
+	//server.StartSCIONServer(ctx2, log, "", snet.CopyUDPAddr(localAddr.Host), 63, provider)
+	//server2Connection := <-simConnectionListener
+	//server2Connection.Id = "server_2"
+	//log.Debug("Simulator received connection of server 2")
+	//
+	//s2ReceiveFrom := make(chan SimPacket)
+	//s2SendTo := make(chan SimPacket)
+	//server2Connection.ReadFrom = s2SendTo
+	//server2Connection.WriteTo = s2ReceiveFrom
 
 	// Client
 	// try with SCION version
@@ -126,7 +171,7 @@ func RunSimulation(
 	var raddr udp.UDPAddr
 	var laddrSNET snet.UDPAddr
 	var raddrSNET snet.UDPAddr
-	err = laddrSNET.Set("1-ff00:0:112,10.1.1.12")
+	err := laddrSNET.Set("1-ff00:0:112,10.1.1.12")
 	if err != nil {
 		log.Fatal("Tool local address failed to parse")
 	}
@@ -164,12 +209,12 @@ func RunSimulation(
 	toolMsg := <-cReceiveFrom
 	log.Debug("Received packet from tool", zap.String("target addr", toolMsg.Addr.String()))
 
-	s1SendTo <- toolMsg
+	simServers[0].SendTo <- toolMsg
 	log.Debug("Forwarded packet to server 1, waiting for response now")
 
 	// Receive response from server 1
 	log.Debug("Sending step")
-	server1Response := <-s1ReceiveFrom
+	server1Response := <-simServers[0].ReceiveFrom
 	log.Debug("Received response from server 1", zap.String("target addr", server1Response.Addr.String()))
 	// Forward response to client
 	cSendTo <- server1Response
@@ -182,8 +227,6 @@ func RunSimulation(
 	}
 
 	defer log.Debug("Canceled all contexts")
-	defer cancel1()
-	defer cancel2()
 	defer cancelClient()
 
 	select {}
