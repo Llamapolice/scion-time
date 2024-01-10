@@ -23,6 +23,10 @@ type SvcConfig struct {
 	DSCP                    uint8    `toml:"dscp,omitempty"` // must be in range [0, 63]
 }
 
+// LoadConfig loads configuration from a file and decodes it into a struct.
+// The cfgStruct parameter must be a pointer to the configuration struct to be filled.
+// The configFile parameter specifies the file path from which to load the configuration.
+// If an error occurs while loading or decoding the configuration, the function will log a fatal error.
 func LoadConfig[T any](cfgStruct T, configFile string) { // T is pointer to config struct
 	raw, err := os.ReadFile(configFile)
 	if err != nil {
