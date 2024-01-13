@@ -103,8 +103,9 @@ func RunSimulation(
 		//refClocks, netClocks := core.CreateClocks(simServer, localAddr, log)
 
 		localAddr.Host.Port = ntp.ServerPortSCION
-		log.Info("Starting server", zap.Int("index", i))
-		server.StartSCIONServer(tmp.Ctx, log, simServer.DaemonAddr, snet.CopyUDPAddr(localAddr.Host), simServer.DSCP, tmp.Provider)
+		dscp := core.Dscp(simServer)
+		daemonAddr := core.DaemonAddress(simServer)
+		server.StartSCIONServer(tmp.Ctx, log, daemonAddr, snet.CopyUDPAddr(localAddr.Host), dscp, tmp.Provider)
 
 		tmpConn := <-simConnectionListener
 		tmp.Conn = tmpConn
