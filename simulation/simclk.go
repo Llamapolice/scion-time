@@ -39,8 +39,8 @@ func (c *SimClock) Now() time.Time {
 }
 
 func (c *SimClock) MaxDrift(duration time.Duration) time.Duration {
-	//TODO implement me
-	panic("SimClock.MaxDrift(): implement me")
+	// Copied straight from sysclk_linux.go
+	return math.MaxInt64
 }
 
 func (c *SimClock) Step(offset time.Duration) {
