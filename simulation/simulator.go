@@ -79,7 +79,7 @@ func RunSimulation(
 	// Some logic to read a config file and fill a settings struct
 	log.Debug("Reading config file", zap.String("config location", configFile))
 	var cfg SimConfigFile
-	core.LoadConfig(&cfg, configFile)
+	core.LoadConfig(&cfg, configFile, log)
 
 	// Some set up to build the simulated network and start instances
 	// Register some channels into the sims
@@ -96,11 +96,15 @@ func RunSimulation(
 	for i, simServer := range cfg.Servers {
 		tmp := newServer()
 		tmp.Id = tmp.Id + string(rune(i))
-		var localAddr snet.UDPAddr
+		var localAddr *snet.UDPAddr
 		err := localAddr.Set(simServer.LocalAddr)
 		if err != nil {
 			log.Fatal("Local address failed to parse", zap.String("id of server", tmp.Id))
 		}
+
+		localAddr.Host.Port = 0
+		//refClocks, netClocks := core.CreateClocks(simServer, localAddr, log)
+
 		localAddr.Host.Port = ntp.ServerPortSCION
 		log.Info("Starting server", zap.Int("index", i))
 		server.StartSCIONServer(tmp.Ctx, log, simServer.DaemonAddr, snet.CopyUDPAddr(localAddr.Host), simServer.DSCP, tmp.Provider)
@@ -213,7 +217,6 @@ func RunSimulation(
 	log.Debug("Forwarded packet to server 1, waiting for response now")
 
 	// Receive response from server 1
-	log.Debug("Sending step")
 	server1Response := <-simServers[0].ReceiveFrom
 	log.Debug("Received response from server 1", zap.String("target addr", server1Response.Addr.String()))
 	// Forward response to client
