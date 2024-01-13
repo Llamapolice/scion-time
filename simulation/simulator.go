@@ -8,6 +8,7 @@ import (
 	"example.com/scion-time/core"
 	"example.com/scion-time/core/client"
 	"example.com/scion-time/core/server"
+	"example.com/scion-time/core/sync"
 	"example.com/scion-time/net/ntp"
 	"example.com/scion-time/net/ntske"
 	"example.com/scion-time/net/udp"
@@ -99,9 +100,23 @@ func RunSimulation(
 		tmp.Id = tmp.Id + string(rune(i))
 		localAddr := core.LocalAddress(simServer)
 
+		// Clock Sync
+		log.Debug("Starting clock sync")
 		localAddr.Host.Port = 0
-		//refClocks, netClocks := core.CreateClocks(simServer, localAddr, log)
+		refClocks, netClocks := core.CreateClocks(simServer, localAddr, log)
+		sync.RegisterClocks(refClocks, netClocks)
 
+		if len(refClocks) != 0 {
+			sync.SyncToRefClocks(log, lclk)
+			go sync.RunLocalClockSync(log, lclk)
+		}
+
+		if len(netClocks) != 0 {
+			go sync.RunGlobalClockSync(log, lclk)
+		}
+
+		// Server starting
+		log.Info("Starting server", zap.Int("index", i))
 		localAddr.Host.Port = ntp.ServerPortSCION
 		dscp := core.Dscp(simServer)
 		daemonAddr := core.DaemonAddress(simServer)

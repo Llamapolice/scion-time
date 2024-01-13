@@ -59,6 +59,7 @@ func RegisterClocks(refClocks, netClocks []client.ReferenceClock) {
 }
 
 func measureOffsetToRefClocks(log *zap.Logger, timeout time.Duration) time.Duration {
+	log.Debug("Measuring offset to reference clocks")
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	refClkClient.MeasureClockOffsets(ctx, log, refClks, refClkOffsets)
@@ -107,6 +108,7 @@ func RunLocalClockSync(log *zap.Logger, lclk timebase.LocalClock) {
 }
 
 func measureOffsetToNetClocks(log *zap.Logger, timeout time.Duration) time.Duration {
+	log.Debug("Measuring offset to net clocks")
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	netClkClient.MeasureClockOffsets(ctx, log, netClks, netClkOffsets)
