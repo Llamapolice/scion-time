@@ -50,7 +50,11 @@ type NtpReferenceClockSCION struct {
 
 func (c *NtpReferenceClockSCION) MeasureClockOffset(ctx context.Context, log *zap.Logger) (
 	time.Duration, error) {
-	paths := c.pather.Paths(c.remoteAddr.IA)
+	// TODO: Only a temporary workaround to not panic here, some pather needs to be added
+	var paths []snet.Path
+	if c.pather != nil {
+		paths = c.pather.Paths(c.remoteAddr.IA)
+	}
 	return client.MeasureClockOffsetSCION(ctx, log, c.ntpcs[:], c.localAddr, c.remoteAddr, paths)
 }
 
