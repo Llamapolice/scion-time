@@ -94,13 +94,10 @@ func RunSimulation(
 	simServers := make([]Server, len(cfg.Servers))
 
 	for i, simServer := range cfg.Servers {
+		log.Debug("Setting up server", zap.Int("server", i))
 		tmp := newServer()
 		tmp.Id = tmp.Id + string(rune(i))
-		var localAddr *snet.UDPAddr
-		err := localAddr.Set(simServer.LocalAddr)
-		if err != nil {
-			log.Fatal("Local address failed to parse", zap.String("id of server", tmp.Id))
-		}
+		localAddr := core.LocalAddress(simServer)
 
 		localAddr.Host.Port = 0
 		//refClocks, netClocks := core.CreateClocks(simServer, localAddr, log)
