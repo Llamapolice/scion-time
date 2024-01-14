@@ -144,7 +144,7 @@ func runServer(configFile string) {
 
 	localAddr.Host.Port = 0
 	refClocks, netClocks := core.CreateClocks(cfg, localAddr, log)
-	sync.RegisterClocks(refClocks, netClocks)
+	syncClks := sync.RegisterClocks(refClocks, netClocks)
 
 	lclk := &clock.SystemClock{Log: log}
 	timebase.RegisterClock(lclk)
@@ -156,12 +156,12 @@ func runServer(configFile string) {
 	netbase.RegisterNetProvider(lnet)
 
 	if len(refClocks) != 0 {
-		sync.SyncToRefClocks(log, lclk)
-		go sync.RunLocalClockSync(log, lclk)
+		sync.SyncToRefClocks(log, lclk, syncClks)
+		go sync.RunLocalClockSync(log, lclk, syncClks)
 	}
 
 	if len(netClocks) != 0 {
-		go sync.RunGlobalClockSync(log, lclk)
+		go sync.RunGlobalClockSync(log, lclk, syncClks)
 	}
 
 	dscp := core.Dscp(cfg)
@@ -189,7 +189,7 @@ func runRelay(configFile string) {
 
 	localAddr.Host.Port = 0
 	refClocks, netClocks := core.CreateClocks(cfg, localAddr, log)
-	sync.RegisterClocks(refClocks, netClocks)
+	syncClks := sync.RegisterClocks(refClocks, netClocks)
 
 	lclk := &clock.SystemClock{Log: log}
 	timebase.RegisterClock(lclk)
@@ -201,8 +201,8 @@ func runRelay(configFile string) {
 	netbase.RegisterNetProvider(lnet)
 
 	if len(refClocks) != 0 {
-		sync.SyncToRefClocks(log, lclk)
-		go sync.RunLocalClockSync(log, lclk)
+		sync.SyncToRefClocks(log, lclk, syncClks)
+		go sync.RunLocalClockSync(log, lclk, syncClks)
 	}
 
 	if len(netClocks) != 0 {
@@ -233,7 +233,7 @@ func runClient(configFile string) {
 
 	localAddr.Host.Port = 0
 	refClocks, netClocks := core.CreateClocks(cfg, localAddr, log)
-	sync.RegisterClocks(refClocks, netClocks)
+	syncClks := sync.RegisterClocks(refClocks, netClocks)
 
 	lclk := &clock.SystemClock{Log: log}
 	timebase.RegisterClock(lclk)
@@ -257,8 +257,8 @@ func runClient(configFile string) {
 	}
 
 	if len(refClocks) != 0 {
-		sync.SyncToRefClocks(log, lclk)
-		go sync.RunLocalClockSync(log, lclk)
+		sync.SyncToRefClocks(log, lclk, syncClks)
+		go sync.RunLocalClockSync(log, lclk, syncClks)
 	}
 
 	if len(netClocks) != 0 {

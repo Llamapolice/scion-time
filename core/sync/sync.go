@@ -29,51 +29,63 @@ const (
 
 type localReferenceClock struct{}
 
-var (
+//var (
+//	refClks       []client.ReferenceClock
+//	refClkOffsets []time.Duration
+//	refClkClient  client.ReferenceClockClient
+//	netClks       []client.ReferenceClock
+//	netClkOffsets []time.Duration
+//	netClkClient  client.ReferenceClockClient
+//)
+
+type SyncableClocks struct {
 	refClks       []client.ReferenceClock
 	refClkOffsets []time.Duration
 	refClkClient  client.ReferenceClockClient
 	netClks       []client.ReferenceClock
 	netClkOffsets []time.Duration
 	netClkClient  client.ReferenceClockClient
-)
+	Id            string
+}
 
 func (c *localReferenceClock) MeasureClockOffset(context.Context, *zap.Logger) (
 	time.Duration, error) {
 	return 0, nil
 }
 
-func RegisterClocks(refClocks, netClocks []client.ReferenceClock) {
-	if refClks != nil || netClks != nil {
-		panic("reference clocks already registered")
-	}
+func RegisterClocks(refClocks, netClocks []client.ReferenceClock) *SyncableClocks {
+	//if refClks != nil || netClks != nil {
+	//	panic("reference clocks already registered")
+	//}
+	clks := SyncableClocks{}
 
-	refClks = refClocks
-	refClkOffsets = make([]time.Duration, len(refClks))
+	clks.refClks = refClocks
+	clks.refClkOffsets = make([]time.Duration, len(clks.refClks))
 
-	netClks = netClocks
-	if len(netClks) != 0 {
-		netClks = append(netClks, &localReferenceClock{})
+	clks.netClks = netClocks
+	if len(clks.netClks) != 0 {
+		clks.netClks = append(clks.netClks, &localReferenceClock{})
 	}
-	netClkOffsets = make([]time.Duration, len(netClks))
+	clks.netClkOffsets = make([]time.Duration, len(clks.netClks))
+	return &clks
 }
 
-func measureOffsetToRefClocks(log *zap.Logger, timeout time.Duration) time.Duration {
+func (c *SyncableClocks) measureOffsetToRefClocks(log *zap.Logger, timeout time.Duration) time.Duration {
 	log.Debug("Measuring offset to reference clocks")
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	refClkClient.MeasureClockOffsets(ctx, log, refClks, refClkOffsets)
-	return timemath.Median(refClkOffsets)
+	c.refClkClient.MeasureClockOffsets(ctx, log, c.refClks, c.refClkOffsets)
+	return timemath.Median(c.refClkOffsets)
 }
 
-func SyncToRefClocks(log *zap.Logger, lclk timebase.LocalClock) {
-	corr := measureOffsetToRefClocks(log, refClkTimeout)
+func SyncToRefClocks(log *zap.Logger, lclk timebase.LocalClock, syncClks *SyncableClocks) {
+	corr := syncClks.measureOffsetToRefClocks(log, refClkTimeout)
 	if corr != 0 {
 		lclk.Step(corr)
 	}
 }
 
-func RunLocalClockSync(log *zap.Logger, lclk timebase.LocalClock) {
+func RunLocalClockSync(log *zap.Logger, lclk timebase.LocalClock, syncClks *SyncableClocks) {
 	if refClkImpact <= 1.0 {
 		panic("invalid reference clock impact factor")
 	}
@@ -94,7 +106,7 @@ func RunLocalClockSync(log *zap.Logger, lclk timebase.LocalClock) {
 	pll := newPLL(log, lclk)
 	for {
 		corrGauge.Set(0)
-		corr := measureOffsetToRefClocks(log, refClkTimeout)
+		corr := syncClks.measureOffsetToRefClocks(log, refClkTimeout)
 		if timemath.Abs(corr) > refClkCutoff {
 			if float64(timemath.Abs(corr)) > maxCorr {
 				corr = time.Duration(float64(timemath.Sign(corr)) * maxCorr)
@@ -107,15 +119,15 @@ func RunLocalClockSync(log *zap.Logger, lclk timebase.LocalClock) {
 	}
 }
 
-func measureOffsetToNetClocks(log *zap.Logger, timeout time.Duration) time.Duration {
+func (c *SyncableClocks) measureOffsetToNetClocks(log *zap.Logger, timeout time.Duration) time.Duration {
 	log.Debug("Measuring offset to net clocks")
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	netClkClient.MeasureClockOffsets(ctx, log, netClks, netClkOffsets)
-	return timemath.FaultTolerantMidpoint(netClkOffsets)
+	c.netClkClient.MeasureClockOffsets(ctx, log, c.netClks, c.netClkOffsets)
+	return timemath.FaultTolerantMidpoint(c.netClkOffsets)
 }
 
-func RunGlobalClockSync(log *zap.Logger, lclk timebase.LocalClock) {
+func RunGlobalClockSync(log *zap.Logger, lclk timebase.LocalClock, syncClks *SyncableClocks) {
 	if netClkImpact <= 1.0 {
 		panic("invalid network clock impact factor")
 	}
@@ -132,14 +144,20 @@ func RunGlobalClockSync(log *zap.Logger, lclk timebase.LocalClock) {
 	if maxCorr <= 0 {
 		panic("invalid network clock max correction")
 	}
+	name := metrics.SyncGlobalCorrN
+	help := metrics.SyncGlobalCorrH
+	if syncClks.Id != "" {
+		name += syncClks.Id
+		help += syncClks.Id
+	}
 	corrGauge := promauto.NewGauge(prometheus.GaugeOpts{
-		Name: metrics.SyncGlobalCorrN,
-		Help: metrics.SyncGlobalCorrH,
+		Name: name,
+		Help: help,
 	})
 	pll := newPLL(log, lclk)
 	for {
 		corrGauge.Set(0)
-		corr := measureOffsetToNetClocks(log, netClkTimeout)
+		corr := syncClks.measureOffsetToNetClocks(log, netClkTimeout)
 		if timemath.Abs(corr) > netClkCutoff {
 			if float64(timemath.Abs(corr)) > maxCorr {
 				corr = time.Duration(float64(timemath.Sign(corr)) * maxCorr)

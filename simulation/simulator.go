@@ -15,6 +15,7 @@ import (
 	"github.com/scionproto/scion/pkg/snet"
 	"github.com/scionproto/scion/pkg/snet/path"
 	"go.uber.org/zap"
+	"strconv"
 	"time"
 )
 
@@ -32,6 +33,7 @@ type Server struct {
 	SendTo      chan SimPacket
 	Conn        *SimConnection
 	Provider    *ntske.Provider
+	SyncClks    *sync.SyncableClocks
 }
 
 type instance struct {
@@ -97,26 +99,27 @@ func RunSimulation(
 	for i, simServer := range cfg.Servers {
 		log.Debug("Setting up server", zap.Int("server", i))
 		tmp := newServer()
-		tmp.Id = tmp.Id + string(rune(i))
+		tmp.Id = tmp.Id + strconv.Itoa(i)
 		localAddr := core.LocalAddress(simServer)
 
 		// Clock Sync
 		log.Debug("Starting clock sync")
 		localAddr.Host.Port = 0
 		refClocks, netClocks := core.CreateClocks(simServer, localAddr, log)
-		sync.RegisterClocks(refClocks, netClocks)
-
+		syncClks := sync.RegisterClocks(refClocks, netClocks)
+		syncClks.Id = tmp.Id
+		tmp.SyncClks = syncClks
 		if len(refClocks) != 0 {
-			sync.SyncToRefClocks(log, lclk)
-			go sync.RunLocalClockSync(log, lclk)
+			sync.SyncToRefClocks(log, lclk, syncClks)
+			go sync.RunLocalClockSync(log, lclk, syncClks)
 		}
 
 		if len(netClocks) != 0 {
-			go sync.RunGlobalClockSync(log, lclk)
+			go sync.RunGlobalClockSync(log, lclk, syncClks)
 		}
 
 		// Server starting
-		log.Info("Starting server", zap.Int("index", i))
+		log.Info("Starting server", zap.String("id", tmp.Id))
 		localAddr.Host.Port = ntp.ServerPortSCION
 		dscp := core.Dscp(simServer)
 		daemonAddr := core.DaemonAddress(simServer)
