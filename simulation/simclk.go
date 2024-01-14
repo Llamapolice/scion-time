@@ -60,8 +60,9 @@ func (c *SimClock) Adjust(offset, duration time.Duration, frequency float64) {
 }
 
 func (c *SimClock) Sleep(duration time.Duration) {
-	//TODO implement me
-	panic("SimClock.Sleep(): implement me")
+	//TODO implement me correctly
+	c.log.Debug("SimClock sleeping", zap.Duration("duration", duration))
+	time.Sleep(duration)
 }
 
 var _ timebase.LocalClock = (*SimClock)(nil)
