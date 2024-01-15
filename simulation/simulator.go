@@ -227,7 +227,7 @@ func RunSimulation(
 	}
 
 	// Clients
-	// turns out i did some weird stuff here, now basically using what is in timeservice.go
+	// turns out I did some weird stuff here, now basically using what is in timeservice.go
 	log.Info("Servers and Relays are set up, now setting up Clients", zap.Int("amount", len(cfg.Clients)))
 	simClients := make([]Client, len(cfg.Clients))
 	for i, clnt := range cfg.Clients {
