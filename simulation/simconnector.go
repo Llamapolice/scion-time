@@ -9,8 +9,10 @@ import (
 	"github.com/scionproto/scion/pkg/private/common"
 	"github.com/scionproto/scion/pkg/private/ctrl/path_mgmt"
 	"github.com/scionproto/scion/pkg/snet"
+	"github.com/scionproto/scion/pkg/snet/path"
 	"go.uber.org/zap"
 	"net"
+	"strings"
 	"time"
 )
 
@@ -21,16 +23,21 @@ type SimConnector struct {
 }
 
 type SimDaemonConnector struct {
+	Ctx        context.Context
+	DaemonAddr string
+	CallerIA   addr.IA
 }
 
 func (s SimDaemonConnector) LocalIA(ctx context.Context) (addr.IA, error) {
-	//TODO implement me
-	panic("implement me")
+	return s.CallerIA, nil
 }
 
 func (s SimDaemonConnector) Paths(ctx context.Context, dst, src addr.IA, f daemon.PathReqFlags) ([]snet.Path, error) {
-	//TODO implement me
-	panic("implement me")
+	//TODO does this need more?
+	paths := []snet.Path{
+		path.Path{Src: s.CallerIA, Dst: s.CallerIA, DataplanePath: path.Empty{}},
+	}
+	return paths, nil
 }
 
 func (s SimDaemonConnector) ASInfo(ctx context.Context, ia addr.IA) (daemon.ASInfo, error) {
@@ -76,8 +83,18 @@ func (s SimDaemonConnector) Close() error {
 var _ daemon.Connector = (*SimDaemonConnector)(nil)
 
 func (s *SimConnector) NewDaemonConnector(ctx context.Context, daemonAddr string) daemon.Connector {
-	//TODO implement me
-	return SimDaemonConnector{}
+	var laddrIA addr.IA
+	s.log.Debug("New daemon connector being requested", zap.String("passed daemonAddr", daemonAddr))
+	err := laddrIA.Set(strings.Split(daemonAddr, "@")[1])
+	if err != nil {
+		s.log.Error("Couldn't set IA for daemon connector", zap.Error(err))
+		laddrIA = 0
+	}
+	return SimDaemonConnector{
+		Ctx:        ctx,
+		DaemonAddr: daemonAddr,
+		CallerIA:   laddrIA,
+	}
 }
 
 func NewSimConnector(log *zap.Logger) *SimConnector {

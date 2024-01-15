@@ -251,7 +251,14 @@ func RemoteAddress(cfg SvcConfig) *snet.UDPAddr {
 }
 
 func DaemonAddress(cfg SvcConfig) string {
-	return cfg.DaemonAddr
+	da := cfg.DaemonAddr
+	if da == "" {
+		return da
+	}
+	if da[:3] == "sim" {
+		da += "@" + LocalAddress(cfg).IA.String()
+	}
+	return da
 }
 
 func NewNTPReferenceClockSCION(daemonAddr string, localAddr, remoteAddr udp.UDPAddr, dscp uint8,
