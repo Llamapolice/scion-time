@@ -19,7 +19,7 @@ func NewSimCrypto(seed int64, log *zap.Logger) *SimCrypto {
 }
 
 func (s *SimCrypto) RandIntn(ctx context.Context, n int) (int, error) {
-	s.log.Info("Getting simulated random int", zap.Int("max", n))
+	s.log.Debug("Getting simulated random int", zap.Int("max", n))
 	if n <= 0 {
 		panic("invalid argument to RandIntn: n must be greater than 0")
 	}
@@ -27,7 +27,7 @@ func (s *SimCrypto) RandIntn(ctx context.Context, n int) (int, error) {
 }
 
 func (s *SimCrypto) Sample(ctx context.Context, k, n int, pick func(dst int, src int)) (int, error) { // basically copied from base/crypto
-	s.log.Info("Sampling using simulated randomness")
+	s.log.Debug("Sampling using simulated randomness")
 	if k < 0 {
 		panic("invalid argument to Sample: k must be non-negative")
 	}

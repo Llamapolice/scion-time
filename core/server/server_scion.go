@@ -490,6 +490,7 @@ func StartSCIONServer(ctx context.Context, log *zap.Logger,
 		}
 		return r
 	}, localHost.String())
+	log.Debug("creating new metrics from StartSCIONServer", zap.String("id", id))
 	mtrcs := newSCIONServerMetrics("_" + id)
 
 	if scionServerNumGoroutine == 1 {
@@ -531,7 +532,8 @@ func StartSCIONDispatcher(ctx context.Context, log *zap.Logger,
 		}
 		return r
 	}, localHost.String())
-	mtrcs := newSCIONServerMetrics("_" + id)
+	log.Debug("creating new metrics from dispatcher", zap.String("id", id))
+	mtrcs := newSCIONServerMetrics("_dispatcher_" + id)
 
 	conn, err := netbase.ListenUDP("udp", localHost)
 	if err != nil {
