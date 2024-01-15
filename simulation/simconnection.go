@@ -14,6 +14,7 @@ type SimConnection struct {
 	ReadFrom chan SimPacket
 	WriteTo  chan SimPacket
 
+	Deadline time.Time
 	// Following are temporary, might be nice for debugging, but might change
 	Network string
 	LAddr   *net.UDPAddr
@@ -100,7 +101,11 @@ func (S *SimConnection) WriteToUDPAddrPort(b []byte, addr netip.AddrPort) (int, 
 
 func (S *SimConnection) SetDeadline(t time.Time) error {
 	//TODO implement me
-	panic("SetDeadline: implement me")
+	//if S.Deadline != time.Unix(0, 0) {
+	//	panic("Previous deadline not resolved")
+	//}
+	S.Deadline = t
+	return nil
 }
 
 func (S *SimConnection) LocalAddr() net.Addr {
