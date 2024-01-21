@@ -19,7 +19,8 @@ import (
 type SimConnector struct {
 	CallBack chan *SimConnection
 
-	log *zap.Logger
+	log  *zap.Logger
+	port int
 }
 
 type SimDaemonConnector struct {
@@ -99,14 +100,20 @@ func (s *SimConnector) NewDaemonConnector(ctx context.Context, daemonAddr string
 
 func NewSimConnector(log *zap.Logger) *SimConnector {
 	log.Info("Creating a new sim connector")
-	return &SimConnector{log: log}
+	return &SimConnector{log: log, port: 1000}
 }
 
 func (s *SimConnector) ListenUDP(network string, laddr *net.UDPAddr) (netprovider.Connection, error) {
-	s.log.Info("Opening a new sim connection", zap.String("network", network), zap.String("laddr", laddr.String()))
+	s.log.Info("Opening a new sim connection")
+	if laddr.Port == 0 {
+		p := s.port
+		s.log.Debug("Incoming port is 0, assigned one by SimConnector", zap.Int("new port", p))
+		s.port += 1
+		laddr.Port = p
+	}
 	simConn := &SimConnection{Log: s.log, Network: network, LAddr: laddr}
 	s.CallBack <- simConn
-	s.log.Debug("Sim connection passed into channel")
+	s.log.Debug("Sim connection passed into channel", zap.String("network", network), zap.String("laddr", laddr.String()))
 	return simConn, nil
 }
 
