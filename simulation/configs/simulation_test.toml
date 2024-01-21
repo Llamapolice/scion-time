@@ -5,7 +5,7 @@ daemon_address =  "simDaemon11" # empty for now, was "10.1.1.11:30255"
 mbg_reference_clocks = [] # "/sim/simRefClk11"]
 ntp_reference_clocks = []
 scion_peers = ["1-ff00:0:111,10.1.1.12"]
-auth_modes = ["spao"]
+auth_modes = [] #"spao"]
 
 ntske_cert_file = "testnet/gen/tls.crt"
 ntske_key_file = "testnet/gen/tls.key"
@@ -20,7 +20,7 @@ daemon_address = "simDaemon12" # empty for now, was "10.1.1.12:30255"
 mbg_reference_clocks = [] # "/sim/simRefClk12"]
 ntp_reference_clocks = []
 scion_peers = ["1-ff00:0:111,10.1.1.11:10123"]
-auth_modes = ["spao"]
+auth_modes = []#"spao"]
 
 ntske_cert_file = "testnet/gen/tls.crt"
 ntske_key_file = "testnet/gen/tls.key"
