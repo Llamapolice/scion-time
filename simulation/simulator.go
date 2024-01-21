@@ -13,6 +13,7 @@ import (
 	"example.com/scion-time/net/ntp"
 	"example.com/scion-time/net/ntske"
 	"example.com/scion-time/net/udp"
+	"fmt"
 	"github.com/scionproto/scion/pkg/snet"
 	"github.com/scionproto/scion/pkg/snet/path"
 	"go.uber.org/zap"
@@ -130,7 +131,40 @@ func RunSimulation(
 	}
 	simConnector.CallBack = simConnectionListener
 
+	receivingInstances := make(map[string]chan SimPacket)
 	receiver := make(chan SimPacket)
+
+	// Bare-bones message handler to pass messages around
+	go func() {
+		log.Info("Message handler started")
+		for msg := range receiver {
+			log.Debug("Message handler received message", zap.Binary("msg", msg.B), zap.String("target", msg.Addr.String()))
+			receivingInstance, exists := receivingInstances[msg.Addr.String()]
+			if exists {
+				receivingInstance <- msg
+				log.Debug("Passed message on to instance")
+			} else {
+				log.Warn("Targeted address does not exist in the map (yet), message dropped", zap.String("target", msg.Addr.String()))
+			}
+		}
+		log.Info("Message handler terminating")
+	}()
+
+	// Helper func to do the repetitive part of handling connections
+	// Not a standalone function to not have to pass the connection listener and receiver map all the time
+	handleConnectionSetup := func(id string, receiveFromInstance, sendToInstance chan SimPacket) *SimConnection {
+		tmpConn := <-simConnectionListener
+		tmpConn.Id = id
+		senderChan := make(chan SimPacket)
+		tmpConn.WriteTo = receiveFromInstance
+		if sendToInstance != nil {
+			senderChan = sendToInstance
+		}
+		tmpConn.ReadFrom = senderChan
+		log.Debug("Subscribing address", zap.String("addr", tmpConn.LAddr.AddrPort().String()))
+		receivingInstances[tmpConn.LAddr.AddrPort().String()] = senderChan
+		return tmpConn
+	}
 
 	log.Info("Setting up Servers", zap.Int("amount", len(cfg.Servers)))
 	simServers := make([]Server, len(cfg.Servers))
@@ -149,14 +183,24 @@ func RunSimulation(
 		syncClks.Id = tmp.Id
 		tmp.SyncClks = syncClks
 		if len(refClocks) != 0 {
+			log.Debug("Found reference clocks", zap.Int("amount", len(refClocks)))
 			sync.SyncToRefClocks(log, lclk, syncClks)
 			go sync.RunLocalClockSync(log, lclk, syncClks)
 		}
 
 		if len(netClocks) != 0 {
+			log.Debug("Found net clocks", zap.Int("amount", len(netClocks)))
 			go sync.RunGlobalClockSync(log, lclk, syncClks)
+			tmpSyncConn := handleConnectionSetup(tmp.Id+"_netSync", tmp.ReceiveFromInstance, nil)
+			//tmpSyncConn := <-simConnectionListener
+			//tmpSyncConn.Id = tmp.Id + "_netSync"
+			//senderChan := make(chan SimPacket)
+			//tmpSyncConn.WriteTo = tmp.ReceiveFromInstance
+			//tmpSyncConn.ReadFrom = senderChan
+			//receivingInstances[tmpSyncConn.LAddr.AddrPort()] = senderChan
+			log.Debug("Received sync connection", zap.String("local addr", tmpSyncConn.LAddr.String()))
 		}
-		log.Debug("Clock syncs started")
+		log.Debug("Clock sync active")
 		log.Debug("Press Enter to continue to server start")
 		scanner.Scan()
 		// Server starting
@@ -166,12 +210,13 @@ func RunSimulation(
 		daemonAddr := core.DaemonAddress(simServer)
 		server.StartSCIONServer(tmp.Ctx, log, daemonAddr, snet.CopyUDPAddr(localAddr.Host), dscp, tmp.Provider)
 
-		tmpConn := <-simConnectionListener
-		tmp.Conn = tmpConn
-		tmp.Conn.Id = tmp.Id + "_conn"
-		log.Debug("Simulator received connection", zap.String("server id", tmp.Id), zap.String("connection id", tmp.Conn.Id))
-		tmp.Conn.ReadFrom = tmp.SendToInstance
-		tmp.Conn.WriteTo = tmp.ReceiveFromInstance
+		tmp.Conn = handleConnectionSetup(tmp.Id+"_conn", tmp.ReceiveFromInstance, tmp.SendToInstance)
+		//tmpConn := <-simConnectionListener
+		//tmp.Conn = tmpConn
+		//tmp.Conn.Id = tmp.Id + "_conn"
+		//tmp.Conn.ReadFrom = tmp.SendToInstance
+		//tmp.Conn.WriteTo = tmp.ReceiveFromInstance
+		log.Debug("Simulator received connection", zap.String("server id", tmp.Id), zap.String("connection id", tmp.Conn.Id), zap.String("conn laddr", tmp.Conn.LAddr.String()))
 
 		simServers[i] = tmp
 		log.Debug("Done setting up server, press Enter to continue", zap.String("server id", tmp.Id))
@@ -214,12 +259,13 @@ func RunSimulation(
 		daemonAddr := core.DaemonAddress(relay)
 		server.StartSCIONServer(tmp.Ctx, log, daemonAddr, snet.CopyUDPAddr(localAddr.Host), dscp, tmp.Provider)
 
-		tmpConn := <-simConnectionListener
-		tmp.Conn = tmpConn
-		tmp.Conn.Id = tmp.Id + "_conn"
+		tmp.Conn = handleConnectionSetup(tmp.Id+"_conn", tmp.ReceiveFromInstance, tmp.SendToInstance)
+		//tmpConn := <-simConnectionListener
+		//tmp.Conn = tmpConn
+		//tmp.Conn.Id = tmp.Id + "_conn"
+		//tmp.Conn.ReadFrom = tmp.SendToInstance
+		//tmp.Conn.WriteTo = tmp.ReceiveFromInstance
 		log.Debug("Simulator received connection", zap.String("relay id", tmp.Id), zap.String("connection id", tmp.Conn.Id))
-		tmp.Conn.ReadFrom = tmp.SendToInstance
-		tmp.Conn.WriteTo = tmp.ReceiveFromInstance
 
 		simRelays[i] = tmp
 		log.Debug("Done setting up relay, press Enter to continue", zap.String("relay id", tmp.Id))
@@ -252,12 +298,13 @@ func RunSimulation(
 		}
 		if scionClocksAvailable {
 			server.StartSCIONDispatcher(tmp.Ctx, log, snet.CopyUDPAddr(laddr.Host))
-			tmpConn := <-simConnectionListener
-			tmp.Conn = tmpConn
-			tmp.Conn.Id = tmp.Id + "_conn"
+			tmp.Conn = handleConnectionSetup(tmp.Id+"_conn", tmp.ReceiveFromInstance, tmp.SendToInstance)
+			//tmpConn := <-simConnectionListener
+			//tmp.Conn = tmpConn
+			//tmp.Conn.Id = tmp.Id + "_conn"
+			//tmp.Conn.ReadFrom = tmp.SendToInstance
+			//tmp.Conn.WriteTo = tmp.ReceiveFromInstance
 			log.Debug("Simulator received connection", zap.String("relay id", tmp.Id), zap.String("connection id", tmp.Conn.Id))
-			tmp.Conn.ReadFrom = tmp.SendToInstance
-			tmp.Conn.WriteTo = tmp.ReceiveFromInstance
 		}
 
 		if len(refClocks) != 0 {
@@ -275,6 +322,8 @@ func RunSimulation(
 	log.Info("Setup completed")
 
 	log.Info("Press Enter to run tool")
+
+	fmt.Println(receivingInstances)
 	scanner.Scan()
 	ctxClient := context.Background()
 	var laddr udp.UDPAddr
@@ -309,27 +358,29 @@ func RunSimulation(
 		scanner.Scan()
 		os.Exit(0)
 	}()
-	clientConnection := <-simConnectionListener
-	clientConnection.Id = "client"
-	log.Debug("Simulator received connection of client")
 
-	cReceiveFrom := make(chan SimPacket)
-	cSendTo := make(chan SimPacket)
-	clientConnection.ReadFrom = cSendTo
-	clientConnection.WriteTo = cReceiveFrom
-
-	// Start communication from tool to server
-	toolMsg := <-cReceiveFrom
-	log.Debug("Received packet from tool", zap.String("target addr", toolMsg.Addr.String()))
-
-	simServers[0].SendToInstance <- toolMsg
-	log.Debug("Forwarded packet to server 1, waiting for response now")
-
-	// Receive response from server 1
-	server1Response := <-simServers[0].ReceiveFromInstance
-	log.Debug("Received response from server 1", zap.String("target addr", server1Response.Addr.String()))
-	// Forward response to client
-	cSendTo <- server1Response
+	//tReceiveFrom := make(chan SimPacket)
+	tSendTo := make(chan SimPacket)
+	toolConnection := handleConnectionSetup("tool", receiver, tSendTo)
+	log.Debug("Simulator received connection of tool", zap.String("id", toolConnection.Id))
+	//toolConnection := <-simConnectionListener
+	//toolConnection.Id = "client"
+	//
+	//toolConnection.ReadFrom = tSendTo
+	//toolConnection.WriteTo = tReceiveFrom
+	//
+	//// Start communication from tool to server
+	//toolMsg := <-tReceiveFrom
+	//log.Debug("Received packet from tool", zap.String("target addr", toolMsg.Addr.String()))
+	//
+	//simServers[0].SendToInstance <- toolMsg
+	//log.Debug("Forwarded packet to server 1, waiting for response now")
+	//
+	//// Receive response from server 1
+	//server1Response := <-simServers[0].ReceiveFromInstance
+	//log.Debug("Received response from server 1", zap.String("target addr", server1Response.Addr.String()))
+	//// Forward response to client
+	//tSendTo <- server1Response
 
 	// Main loop of simulation
 	for condition := true; condition; {
@@ -342,3 +393,16 @@ func RunSimulation(
 
 	log.Info("Ended simulation (successfully?)")
 }
+
+//func handleConnectionSetup(id string, receiveFromInstance, sendToInstance chan SimPacket, connListener chan *SimConnection, receivingInstances map[netip.AddrPort]chan SimPacket) *SimConnection {
+//	tmpConn := <-connListener
+//	tmpConn.Id = id
+//	senderChan := make(chan SimPacket)
+//	tmpConn.WriteTo = receiveFromInstance
+//	if sendToInstance != nil {
+//		senderChan = sendToInstance
+//	}
+//	tmpConn.ReadFrom = senderChan
+//	receivingInstances[tmpConn.LAddr.AddrPort()] = senderChan
+//	return tmpConn
+//}

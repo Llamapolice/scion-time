@@ -104,6 +104,7 @@ func (S *SimConnection) SetDeadline(t time.Time) error {
 	//if S.Deadline != time.Unix(0, 0) {
 	//	panic("Previous deadline not resolved")
 	//}
+	S.Log.Debug("Connection getting a deadline", zap.String("conn id", S.Id), zap.Time("deadline", t))
 	S.Deadline = t
 	return nil
 }
