@@ -16,11 +16,19 @@ import (
 	"time"
 )
 
+type PortReleaseMsg struct {
+	Owner string
+	Port  int
+}
+
 type SimConnector struct {
 	CallBack chan *SimConnection
 
-	log  *zap.Logger
-	port int
+	log                *zap.Logger
+	port               int
+	ports              map[string]int
+	connections        map[string]*SimConnection
+	portReleaseMsgChan chan PortReleaseMsg
 }
 
 type SimDaemonConnector struct {
@@ -100,18 +108,41 @@ func (s *SimConnector) NewDaemonConnector(ctx context.Context, daemonAddr string
 
 func NewSimConnector(log *zap.Logger) *SimConnector {
 	log.Info("Creating a new sim connector")
-	return &SimConnector{log: log, port: 1000}
+	portChan := make(chan PortReleaseMsg)
+	ports := make(map[string]int)
+	// This goroutine is responsible for returning ports to the respective address's pool when the connection closes
+	go func() {
+		for m := range portChan {
+			ports[m.Owner] = m.Port
+		}
+	}()
+	return &SimConnector{log: log, port: 1000, connections: make(map[string]*SimConnection), ports: ports, portReleaseMsgChan: portChan}
 }
 
 func (s *SimConnector) ListenUDP(network string, laddr *net.UDPAddr) (netprovider.Connection, error) {
-	s.log.Info("Opening a new sim connection")
+	s.log.Info("Opening a sim connection")
 	if laddr.Port == 0 {
-		p := s.port
-		s.log.Debug("Incoming port is 0, assigned one by SimConnector", zap.Int("new port", p))
-		s.port += 1
-		laddr.Port = p
+		prevPort, existsP := s.ports[network+laddr.String()]
+		if existsP {
+			laddr.Port = prevPort
+		} else {
+			p := 1
+			laddr.Port = p
+			s.ports[network+laddr.String()] = p + 1
+		}
+		s.log.Debug("Incoming port is 0, assigned one by SimConnector", zap.Int("new port", laddr.Port))
 	}
-	simConn := &SimConnection{Log: s.log, Network: network, LAddr: laddr}
+	prevConn, exists := s.connections[network+laddr.String()]
+	if exists && prevConn.Closed {
+		s.log.Debug("Found previous connection, reusing that and not passing it back")
+		prevConn.Closed = false
+		prevConn.LAddr.Port = laddr.Port
+		return prevConn, nil
+	} else if exists {
+		s.log.Fatal("Connection already exists but has not been closed yet", zap.String("laddr", laddr.String()))
+	}
+	simConn := &SimConnection{Log: s.log, Network: network, LAddr: laddr, Closed: true}
+	s.connections[network+laddr.String()] = simConn
 	s.CallBack <- simConn
 	s.log.Debug("Sim connection passed into channel", zap.String("network", network), zap.String("laddr", laddr.String()))
 	return simConn, nil

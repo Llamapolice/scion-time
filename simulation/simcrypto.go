@@ -27,7 +27,7 @@ func (s *SimCrypto) RandIntn(ctx context.Context, n int) (int, error) {
 }
 
 func (s *SimCrypto) Sample(ctx context.Context, k, n int, pick func(dst int, src int)) (int, error) { // basically copied from base/crypto
-	s.log.Debug("Sampling using simulated randomness")
+	//s.log.Debug("Sampling using simulated randomness") // Not a necessary debug line currently
 	if k < 0 {
 		panic("invalid argument to Sample: k must be non-negative")
 	}

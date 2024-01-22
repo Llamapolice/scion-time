@@ -28,7 +28,7 @@ func (c *SimClock) Epoch() uint64 {
 
 func (c *SimClock) Now() time.Time {
 	//TODO implement me
-	if c.counter > 10 { // Hack to stop endless looping
+	if c.counter > 100 { // Hack to stop endless looping
 		panic("Hard cutoff point reached")
 	}
 	c.counter++

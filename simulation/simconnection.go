@@ -16,9 +16,12 @@ type SimConnection struct {
 
 	Deadline time.Time
 	// Following are temporary, might be nice for debugging, but might change
-	Network string
-	LAddr   *net.UDPAddr
-	DSCP    uint8
+	DSCP   uint8
+	Closed bool
+	// These are used by the SimConnector to handle connections
+	Network            string
+	LAddr              *net.UDPAddr
+	PortReleaseMsgChan chan PortReleaseMsg
 }
 
 type SimPacket struct {
@@ -28,6 +31,13 @@ type SimPacket struct {
 
 func (S *SimConnection) Close() error {
 	//TODO implement me
+	S.Closed = true
+	usedPort := S.LAddr.Port
+	S.LAddr.Port = 0
+	S.PortReleaseMsgChan <- PortReleaseMsg{
+		Owner: S.Network + S.LAddr.String(),
+		Port:  usedPort,
+	}
 	S.Log.Debug("Closed simulated connection", zap.String("connection id", S.Id), zap.String("network", S.Network))
 	return nil
 }
@@ -90,7 +100,7 @@ func (S *SimConnection) ReadMsgUDPAddrPort(buf []byte, oob []byte) (
 
 func (S *SimConnection) WriteToUDPAddrPort(b []byte, addr netip.AddrPort) (int, error) {
 	//TODO implement me
-	S.Log.Debug("Message to be written", zap.String("connection id", S.Id), zap.Binary("msg", b), zap.String("target addr", addr.String()))
+	S.Log.Debug("Message to be written", zap.String("connection id", S.Id), zap.Binary("msg", b), zap.String("target addr", addr.String()), zap.String("originating addr", S.LAddr.String()))
 	for S.WriteTo == nil {
 		// Wait for main simulator routine to initialize channel
 		time.Sleep(0)
@@ -100,12 +110,17 @@ func (S *SimConnection) WriteToUDPAddrPort(b []byte, addr netip.AddrPort) (int, 
 }
 
 func (S *SimConnection) SetDeadline(t time.Time) error {
-	//TODO implement me
-	//if S.Deadline != time.Unix(0, 0) {
-	//	panic("Previous deadline not resolved")
-	//}
+	//TODO implement me coorectly
 	S.Log.Debug("Connection getting a deadline", zap.String("conn id", S.Id), zap.Time("deadline", t))
 	S.Deadline = t
+	sleepDuration := time.Until(t)
+	go func() {
+		time.Sleep(sleepDuration)
+		err := S.Close()
+		if err != nil {
+			S.Log.Error("Deadline sleeping did not work", zap.String("connection id", S.Id), zap.Error(err))
+		}
+	}()
 	return nil
 }
 

@@ -13,7 +13,6 @@ import (
 	"example.com/scion-time/net/ntp"
 	"example.com/scion-time/net/ntske"
 	"example.com/scion-time/net/udp"
-	"fmt"
 	"github.com/scionproto/scion/pkg/snet"
 	"github.com/scionproto/scion/pkg/snet/path"
 	"go.uber.org/zap"
@@ -114,7 +113,7 @@ func RunSimulation(
 	lnet netprovider.ConnProvider,
 	log *zap.Logger,
 ) {
-	log.Info("Starting simulation")
+	log.Info("\u001B[34mStarting simulation\u001B[0m")
 	scanner := bufio.NewScanner(os.Stdin)
 
 	// Some logic to read a config file and fill a settings struct
@@ -136,7 +135,7 @@ func RunSimulation(
 
 	// Bare-bones message handler to pass messages around
 	go func() {
-		log.Info("Message handler started")
+		log.Info("\u001B[34mMessage handler started\u001B[0m")
 		for msg := range receiver {
 			log.Debug("Message handler received message", zap.Binary("msg", msg.B), zap.String("target", msg.Addr.String()))
 			receivingInstance, exists := receivingInstances[msg.Addr.String()]
@@ -147,7 +146,7 @@ func RunSimulation(
 				log.Warn("Targeted address does not exist in the map (yet), message dropped", zap.String("target", msg.Addr.String()))
 			}
 		}
-		log.Info("Message handler terminating")
+		log.Info("\u001B[34mMessage handler terminating\u001B[0m")
 	}()
 
 	// Helper func to do the repetitive part of handling connections
@@ -161,16 +160,16 @@ func RunSimulation(
 			senderChan = sendToInstance
 		}
 		tmpConn.ReadFrom = senderChan
-		log.Debug("Subscribing address", zap.String("addr", tmpConn.LAddr.AddrPort().String()))
-		receivingInstances[tmpConn.LAddr.AddrPort().String()] = senderChan
+		log.Debug("Subscribing address", zap.String("LAddr", tmpConn.LAddr.AddrPort().String()), zap.String("LocalAddr()", tmpConn.LocalAddr().String()))
+		receivingInstances[tmpConn.LocalAddr().String()] = senderChan
 		return tmpConn
 	}
 
-	log.Info("Setting up Servers", zap.Int("amount", len(cfg.Servers)))
+	log.Info("\u001B[34mSetting up Servers\u001B[0m", zap.Int("amount", len(cfg.Servers)))
 	simServers := make([]Server, len(cfg.Servers))
 
 	for i, simServer := range cfg.Servers {
-		log.Debug("Setting up server", zap.Int("server", i))
+		log.Debug("\u001B[34mSetting up server\u001B[0m", zap.Int("server", i))
 		tmp := newServer(receiver)
 		tmp.Id = tmp.Id + strconv.Itoa(i)
 		localAddr := core.LocalAddress(simServer)
@@ -192,16 +191,10 @@ func RunSimulation(
 			log.Debug("Found net clocks", zap.Int("amount", len(netClocks)))
 			go sync.RunGlobalClockSync(log, lclk, syncClks)
 			tmpSyncConn := handleConnectionSetup(tmp.Id+"_netSync", tmp.ReceiveFromInstance, nil)
-			//tmpSyncConn := <-simConnectionListener
-			//tmpSyncConn.Id = tmp.Id + "_netSync"
-			//senderChan := make(chan SimPacket)
-			//tmpSyncConn.WriteTo = tmp.ReceiveFromInstance
-			//tmpSyncConn.ReadFrom = senderChan
-			//receivingInstances[tmpSyncConn.LAddr.AddrPort()] = senderChan
 			log.Debug("Received sync connection", zap.String("local addr", tmpSyncConn.LAddr.String()))
 		}
 		log.Debug("Clock sync active")
-		log.Debug("Press Enter to continue to server start")
+		log.Debug("\u001B[34mPress Enter to continue to server start\u001B[0m")
 		scanner.Scan()
 		// Server starting
 		log.Info("Starting server", zap.String("id", tmp.Id))
@@ -211,21 +204,16 @@ func RunSimulation(
 		server.StartSCIONServer(tmp.Ctx, log, daemonAddr, snet.CopyUDPAddr(localAddr.Host), dscp, tmp.Provider)
 
 		tmp.Conn = handleConnectionSetup(tmp.Id+"_conn", tmp.ReceiveFromInstance, tmp.SendToInstance)
-		//tmpConn := <-simConnectionListener
-		//tmp.Conn = tmpConn
-		//tmp.Conn.Id = tmp.Id + "_conn"
-		//tmp.Conn.ReadFrom = tmp.SendToInstance
-		//tmp.Conn.WriteTo = tmp.ReceiveFromInstance
 		log.Debug("Simulator received connection", zap.String("server id", tmp.Id), zap.String("connection id", tmp.Conn.Id), zap.String("conn laddr", tmp.Conn.LAddr.String()))
 
 		simServers[i] = tmp
-		log.Debug("Done setting up server, press Enter to continue", zap.String("server id", tmp.Id))
+		log.Debug("\u001B[34mDone setting up server, press Enter to continue\u001B[0m", zap.String("server id", tmp.Id))
 		scanner.Scan()
 	}
 
 	// Relays
 	// Currently not tested, just basically copy/pasted from timeservice.go
-	log.Info("Servers are set up, continuing with Relays", zap.Int("amount", len(cfg.Relays)))
+	log.Info("\u001B[34mServers are set up, continuing with Relays\u001B[0m", zap.Int("amount", len(cfg.Relays)))
 	simRelays := make([]Relay, len(cfg.Relays))
 
 	for i, relay := range cfg.Relays {
@@ -250,7 +238,7 @@ func RunSimulation(
 			log.Fatal("Unexpected simulation relay configuration", zap.Int("number of peers", len(netClocks)))
 		}
 		log.Debug("Clock syncs started")
-		log.Debug("Press Enter to continue to relay start")
+		log.Debug("\u001B[34mPress Enter to continue to relay start\u001B[0m")
 		scanner.Scan()
 		// Relay starting
 		log.Info("Starting relay", zap.String("id", tmp.Id))
@@ -268,13 +256,13 @@ func RunSimulation(
 		log.Debug("Simulator received connection", zap.String("relay id", tmp.Id), zap.String("connection id", tmp.Conn.Id))
 
 		simRelays[i] = tmp
-		log.Debug("Done setting up relay, press Enter to continue", zap.String("relay id", tmp.Id))
+		log.Debug("\u001B[34mDone setting up relay, press Enter to continue\u001B[0m", zap.String("relay id", tmp.Id))
 		scanner.Scan()
 	}
 
 	// Clients
 	// turns out I did some weird stuff here, now basically using what is in timeservice.go
-	log.Info("Servers and Relays are set up, now setting up Clients", zap.Int("amount", len(cfg.Clients)))
+	log.Info("\u001B[34mServers and Relays are set up, now setting up Clients\u001B[0m", zap.Int("amount", len(cfg.Clients)))
 	simClients := make([]Client, len(cfg.Clients))
 	for i, clnt := range cfg.Clients {
 		log.Debug("Setting up client", zap.Int("client", i))
@@ -299,11 +287,6 @@ func RunSimulation(
 		if scionClocksAvailable {
 			server.StartSCIONDispatcher(tmp.Ctx, log, snet.CopyUDPAddr(laddr.Host))
 			tmp.Conn = handleConnectionSetup(tmp.Id+"_conn", tmp.ReceiveFromInstance, tmp.SendToInstance)
-			//tmpConn := <-simConnectionListener
-			//tmp.Conn = tmpConn
-			//tmp.Conn.Id = tmp.Id + "_conn"
-			//tmp.Conn.ReadFrom = tmp.SendToInstance
-			//tmp.Conn.WriteTo = tmp.ReceiveFromInstance
 			log.Debug("Simulator received connection", zap.String("relay id", tmp.Id), zap.String("connection id", tmp.Conn.Id))
 		}
 
@@ -319,18 +302,16 @@ func RunSimulation(
 		simClients[i] = tmp
 	}
 
-	log.Info("Setup completed")
+	log.Info("\u001B[34mSetup completed\u001B[0m")
 
-	log.Info("Press Enter to run tool")
-
-	fmt.Println(receivingInstances)
+	log.Info("\u001B[34mPress Enter to run tool\u001B[0m")
 	scanner.Scan()
 	ctxClient := context.Background()
 	var laddr udp.UDPAddr
 	var raddr udp.UDPAddr
 	var laddrSNET snet.UDPAddr
 	var raddrSNET snet.UDPAddr
-	err := laddrSNET.Set("1-ff00:0:111,10.1.1.12")
+	err := laddrSNET.Set("1-ff00:0:111,10.1.1.12:3333") // Set a port manually cause the automatic port assignment is buggy
 	if err != nil {
 		log.Fatal("Tool local address failed to parse")
 	}
@@ -353,8 +334,8 @@ func RunSimulation(
 		if err != nil {
 			log.Fatal("Tool had an error", zap.Error(err))
 		}
-		log.Debug("Median Duration measured by tool", zap.Duration("duration", medianDuration))
-		log.Info("Press Enter to exit simulation")
+		log.Debug("\u001B[31mMedian Duration measured by tool\u001B[0m", zap.Duration("duration", medianDuration))
+		log.Info("\u001B[34mPress Enter to exit simulation\u001B[0m")
 		scanner.Scan()
 		os.Exit(0)
 	}()
