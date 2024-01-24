@@ -141,7 +141,7 @@ func (s *SimConnector) ListenUDP(network string, laddr *net.UDPAddr) (netprovide
 	} else if exists {
 		s.log.Fatal("Connection already exists but has not been closed yet", zap.String("laddr", laddr.String()))
 	}
-	simConn := &SimConnection{Log: s.log, Network: network, LAddr: laddr, Closed: true}
+	simConn := &SimConnection{Log: s.log, Network: network, LAddr: laddr, Closed: false, PortReleaseMsgChan: s.portReleaseMsgChan}
 	s.connections[network+laddr.String()] = simConn
 	s.CallBack <- simConn
 	s.log.Debug("Sim connection passed into channel", zap.String("network", network), zap.String("laddr", laddr.String()))
