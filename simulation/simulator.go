@@ -311,7 +311,7 @@ func RunSimulation(
 	var raddr udp.UDPAddr
 	var laddrSNET snet.UDPAddr
 	var raddrSNET snet.UDPAddr
-	err := laddrSNET.Set("1-ff00:0:111,10.1.1.12:3333") // Set a port manually cause the automatic port assignment is buggy
+	err := laddrSNET.Set("1-ff00:0:111,10.1.1.12") // :3333") // Set a port manually cause the automatic port assignment is buggy
 	if err != nil {
 		log.Fatal("Tool local address failed to parse")
 	}
@@ -341,9 +341,10 @@ func RunSimulation(
 	}()
 
 	//tReceiveFrom := make(chan SimPacket)
-	tSendTo := make(chan SimPacket)
-	toolConnection := handleConnectionSetup("tool", receiver, tSendTo)
-	log.Debug("Simulator received connection of tool", zap.String("id", toolConnection.Id))
+	//tSendTo := make(chan SimPacket)
+	//log.Debug("Try to get connection")
+	//toolConnection := handleConnectionSetup("tool", receiver, tSendTo)
+	//log.Debug("Simulator received connection of tool", zap.String("id", toolConnection.Id))
 	//toolConnection := <-simConnectionListener
 	//toolConnection.Id = "client"
 	//
