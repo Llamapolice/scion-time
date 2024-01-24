@@ -67,6 +67,7 @@ var (
 
 func initLogger(verbose bool) {
 	c := zap.NewDevelopmentConfig()
+	c.EncoderConfig.EncodeLevel = zapcore.CapitalColorLevelEncoder // Add some color to the output based on log level
 	c.DisableStacktrace = true
 	c.EncoderConfig.EncodeCaller = func(
 		caller zapcore.EntryCaller, enc zapcore.PrimitiveArrayEncoder) {

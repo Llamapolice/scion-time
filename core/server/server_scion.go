@@ -135,7 +135,8 @@ func runSCIONServer(ctx context.Context, log *zap.Logger, mtrcs *scionServerMetr
 		if err != nil {
 			oob = oob[:0]
 			rxt = timebase.Now()
-			log.Error("failed to read packet rx timestamp from oob, falling back to local clock", zap.Error(err))
+			// TODO put this back
+			//log.Error("failed to read packet rx timestamp from oob, falling back to local clock", zap.Error(err))
 		}
 		buf = buf[:n]
 		mtrcs.pktsReceived.Inc()
@@ -219,7 +220,7 @@ func runSCIONServer(ctx context.Context, log *zap.Logger, mtrcs *scionServerMetr
 			}
 			_, id, err := netbase.ReadTXTimestamp(conn)
 			if err != nil {
-				log.Error("failed to read packet tx timestamp", zap.Error(err))
+				//log.Error("failed to read packet tx timestamp", zap.Error(err)) // TODO this was cluttering logs
 			} else if id != txID {
 				log.Error("failed to read packet tx timestamp", zap.Uint32("id", id), zap.Uint32("expected", txID))
 				txID = id + 1
@@ -454,7 +455,7 @@ func runSCIONServer(ctx context.Context, log *zap.Logger, mtrcs *scionServerMetr
 			txt1, id, err := netbase.ReadTXTimestamp(conn)
 			if err != nil {
 				txt1 = txt0
-				log.Error("failed to read packet tx timestamp", zap.Error(err))
+				//log.Error("failed to read packet tx timestamp", zap.Error(err)) // TODO put this back
 			} else if id != txID {
 				txt1 = txt0
 				log.Error("failed to read packet tx timestamp", zap.Uint32("id", id), zap.Uint32("expected", txID))
