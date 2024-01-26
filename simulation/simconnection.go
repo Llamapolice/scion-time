@@ -18,6 +18,7 @@ type SimConnection struct {
 	// Following are temporary, might be nice for debugging, but might change
 	DSCP uint8
 	// These are used by the SimConnector to handle connections
+	UseCounter         int
 	Closed             bool
 	Network            string
 	LAddr              *net.UDPAddr
@@ -31,19 +32,24 @@ type SimPacket struct {
 
 func (S *SimConnection) Close() error {
 	//TODO implement me
+	S.Log.Debug("Closing SimConnection", zap.String("conn id", S.Id))
+	S.UseCounter += 1
 	if S.Closed {
-		S.Log.Error("Trying to close already closed connection", zap.String("conn id", S.Id), zap.String("conn laddr", S.LAddr.String()))
+		S.Log.Error("Trying to close already closed connection",
+			zap.String("conn id", S.Id), zap.String("conn laddr", S.LAddr.String()))
 		return nil
 	}
 	S.Closed = true
 	usedPort := S.LAddr.Port
-	S.Log.Debug("Releasing port for further use", zap.Int("released port", usedPort), zap.String("laddr", S.LAddr.String()))
+	S.Log.Debug("Releasing port for further use",
+		zap.Int("released port", usedPort), zap.String("laddr", S.LAddr.String()))
 	S.LAddr.Port = 0
 	S.PortReleaseMsgChan <- PortReleaseMsg{
 		Owner: S.Network + S.LAddr.String(),
 		Port:  usedPort,
 	}
-	S.Log.Debug("Closed simulated connection", zap.String("connection id", S.Id), zap.String("network", S.Network))
+	S.Log.Debug("Closed simulated connection",
+		zap.String("connection id", S.Id), zap.String("network", S.Network))
 	return nil
 }
 
@@ -59,13 +65,15 @@ func (S *SimConnection) ReadMsgUDPAddrPort(buf []byte, oob []byte) (
 	addr netip.AddrPort,
 	err error,
 ) {
-	S.Log.Debug("Connection was asked to ReadMsgUDPAddrPort, waiting for something to come in on the channel", zap.String("Server ID", S.Id))
+	S.Log.Debug("Connection was asked to ReadMsgUDPAddrPort, waiting for something to come in on the channel",
+		zap.String("Server ID", S.Id))
 
 	msg := <-S.ReadFrom
 	S.Log.Debug("Received message", zap.String("connection id", S.Id))
 	data := msg.B
 	if len(data) > cap(buf) {
-		S.Log.Error("Buffer passed to ReadMsgUDPAddrPort is too small", zap.Int("data length", len(data)), zap.Int("buffer capacity", cap(buf)))
+		S.Log.Error("Buffer passed to ReadMsgUDPAddrPort is too small",
+			zap.Int("data length", len(data)), zap.Int("buffer capacity", cap(buf)))
 		return 0, 0, 0, netip.AddrPort{}, SimConnectorError{"buffer too small"}
 	}
 	for i, item := range data {
@@ -84,7 +92,8 @@ func (S *SimConnection) ReadMsgUDPAddrPort(buf []byte, oob []byte) (
 
 func (S *SimConnection) WriteToUDPAddrPort(b []byte, addr netip.AddrPort) (int, error) {
 	//TODO implement me
-	S.Log.Debug("Message to be written", zap.String("connection id", S.Id), zap.Binary("msg", b), zap.String("target addr", addr.String()), zap.String("originating addr", S.LAddr.String()))
+	S.Log.Debug("Message to be written", zap.String("connection id", S.Id), zap.Binary("msg", b),
+		zap.String("target addr", addr.String()), zap.String("originating addr", S.LAddr.String()))
 	for S.WriteTo == nil {
 		// Wait for main simulator routine to initialize channel
 		time.Sleep(0)
@@ -94,15 +103,25 @@ func (S *SimConnection) WriteToUDPAddrPort(b []byte, addr netip.AddrPort) (int, 
 }
 
 func (S *SimConnection) SetDeadline(t time.Time) error {
-	//TODO implement me coorectly
-	S.Log.Debug("Connection getting a deadline", zap.String("conn id", S.Id), zap.Time("deadline", t))
+	//TODO implement me correctly
+	S.Log.Debug("Connection getting a deadline",
+		zap.String("conn id", S.Id), zap.Time("deadline", t))
 	S.Deadline = t
 	sleepDuration := time.Until(t)
+	useCounter := S.UseCounter
 	go func() {
 		time.Sleep(sleepDuration)
+		if S.UseCounter != useCounter {
+			S.Log.Debug("Already closed connection timed out",
+				zap.String("conn id", S.Id))
+			return
+		}
+		S.Log.Debug("Connection timed out",
+			zap.String("conn id", S.Id), zap.Duration("after", sleepDuration))
 		err := S.Close()
 		if err != nil {
-			S.Log.Error("Deadline sleeping did not work", zap.String("connection id", S.Id), zap.Error(err))
+			S.Log.Error("Deadline sleeping did not work",
+				zap.String("connection id", S.Id), zap.Error(err))
 		}
 	}()
 	return nil

@@ -61,7 +61,8 @@ func (c *SimClock) Adjust(offset, duration time.Duration, frequency float64) {
 
 func (c *SimClock) Sleep(duration time.Duration) {
 	//TODO implement me correctly
-	duration *= 10 // slowed down for debugging/construction purposes
+	duration = time.Second
+	duration *= 15 // slowed down for debugging/construction purposes
 	c.log.Debug("SimClock sleeping", zap.Duration("duration", duration))
 	time.Sleep(duration)
 }

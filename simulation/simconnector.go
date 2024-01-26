@@ -93,7 +93,8 @@ var _ daemon.Connector = (*SimDaemonConnector)(nil)
 
 func (s *SimConnector) NewDaemonConnector(ctx context.Context, daemonAddr string) daemon.Connector {
 	var laddrIA addr.IA
-	s.log.Debug("New daemon connector being requested", zap.String("passed daemonAddr", daemonAddr))
+	s.log.Debug("New daemon connector being requested",
+		zap.String("passed daemonAddr", daemonAddr))
 	err := laddrIA.Set(strings.Split(daemonAddr, "@")[1])
 	if err != nil {
 		s.log.Error("Couldn't set IA for daemon connector", zap.Error(err))
@@ -116,7 +117,13 @@ func NewSimConnector(log *zap.Logger) *SimConnector {
 			ports[m.Owner] = m.Port
 		}
 	}()
-	return &SimConnector{log: log, port: 1000, connections: make(map[string]*SimConnection), ports: ports, portReleaseMsgChan: portChan}
+	return &SimConnector{
+		log:                log,
+		port:               1000,
+		connections:        make(map[string]*SimConnection),
+		ports:              ports,
+		portReleaseMsgChan: portChan,
+	}
 }
 
 func (s *SimConnector) ListenUDP(network string, laddr *net.UDPAddr) (netprovider.Connection, error) {
@@ -130,7 +137,8 @@ func (s *SimConnector) ListenUDP(network string, laddr *net.UDPAddr) (netprovide
 			laddr.Port = p
 			s.ports[network+laddr.String()] = p + 1
 		}
-		s.log.Debug("Incoming port is 0, assigned one by SimConnector", zap.Int("new port", laddr.Port))
+		s.log.Debug("Incoming port is 0, assigned one by SimConnector",
+			zap.Int("new port", laddr.Port))
 	}
 	prevConn, exists := s.connections[network+laddr.String()]
 	if exists && prevConn.Closed {
@@ -139,12 +147,20 @@ func (s *SimConnector) ListenUDP(network string, laddr *net.UDPAddr) (netprovide
 		prevConn.LAddr.Port = laddr.Port
 		return prevConn, nil
 	} else if exists {
-		s.log.Fatal("Connection already exists but has not been closed yet", zap.String("laddr", laddr.String()))
+		s.log.Fatal("Connection already exists but has not been closed yet",
+			zap.String("laddr", laddr.String()))
 	}
-	simConn := &SimConnection{Log: s.log, Network: network, LAddr: laddr, Closed: false, PortReleaseMsgChan: s.portReleaseMsgChan}
+	simConn := &SimConnection{
+		Log:                s.log,
+		Network:            network,
+		LAddr:              laddr,
+		Closed:             false,
+		PortReleaseMsgChan: s.portReleaseMsgChan,
+	}
 	s.connections[network+laddr.String()] = simConn
 	s.CallBack <- simConn
-	s.log.Debug("Sim connection passed into channel", zap.String("network", network), zap.String("laddr", laddr.String()))
+	s.log.Debug("Sim connection passed into channel",
+		zap.String("network", network), zap.String("laddr", laddr.String()))
 	return simConn, nil
 }
 

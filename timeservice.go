@@ -77,7 +77,7 @@ func initLogger(verbose bool) {
 		//if len(p) > 30 {
 		//	p = "..." + p[len(p)-27:]
 		//}
-		p := caller.FullPath() // Full path so i can click it in the IDE output :)
+		p := caller.FullPath() // Full path so I can click it in the IDE output :)
 		cwd, err := os.Getwd()
 		if err != nil {
 			enc.AppendString(fmt.Sprintf("%30s", p))

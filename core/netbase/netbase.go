@@ -51,10 +51,5 @@ func ListenPacket(network string, address string) (netprovider.Connection, error
 }
 
 func NewDaemonConnector(ctx context.Context, daemonAddr string) daemon.Connector {
-	// Use standard NewDaemonConnector for now
-	//if daemonAddr[:3] == "sim" {
-	//	return simulation.SimDaemonConnector{}
-	//}
-	//return scion.NewDaemonConnector(ctx, daemonAddr)
 	return getNetProvider().NewDaemonConnector(ctx, daemonAddr)
 }
