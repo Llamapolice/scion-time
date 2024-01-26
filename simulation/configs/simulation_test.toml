@@ -1,10 +1,10 @@
 [[servers]]
-local_address = "1-ff00:0:111,10.1.1.11:10123"
+local_address = "1-ff00:0:111,10.1.1.11"
 daemon_address =  "simDaemon11" # empty for now, was "10.1.1.11:30255"
 
 mbg_reference_clocks = [] # "/sim/simRefClk11"]
 ntp_reference_clocks = []
-scion_peers = ["1-ff00:0:111,10.1.1.12"]
+scion_peers = ["1-ff00:0:111,10.1.1.12:10123"]
 auth_modes = [] #"spao"]
 
 ntske_cert_file = "testnet/gen/tls.crt"
