@@ -166,7 +166,6 @@ func (s *SimConnector) ListenUDP(network string, laddr *net.UDPAddr) (netprovide
 
 func (s *SimConnector) EnableTimestamping(n netprovider.Connection, localhostIface string) error {
 	//TODO does this need more code?
-	s.log.Info("Enabling timestamping")
 	if _, ok := n.(*SimConnection); !ok {
 		s.log.Fatal("SimConnector method EnableTimestamping called on a non-simulated connection")
 	}
