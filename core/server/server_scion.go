@@ -351,6 +351,10 @@ func runSCIONServer(ctx context.Context, log *zap.Logger, mtrcs *scionServerMetr
 				zap.Bool("ntsauth", ntsAuthenticated),
 				zap.Object("data", ntp.PacketMarshaler{Pkt: &ntpreq}),
 			)
+			log.Debug("SCION layer before swap",
+				zap.Binary("RawDstAddr", scionLayer.RawDstAddr),
+				zap.Binary("RawSrcAddr", scionLayer.RawSrcAddr),
+			)
 
 			var txt0 time.Time
 			var ntpresp ntp.Packet

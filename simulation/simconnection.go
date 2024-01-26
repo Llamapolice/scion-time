@@ -94,6 +94,9 @@ func (S *SimConnection) WriteToUDPAddrPort(b []byte, addr netip.AddrPort) (int, 
 	//TODO implement me
 	S.Log.Debug("Message to be written", zap.String("connection id", S.Id), zap.Binary("msg", b),
 		zap.String("target addr", addr.String()), zap.String("originating addr", S.LAddr.String()))
+	if addr.Port() == 0 {
+		S.Log.Fatal("Writing to port 0 is not possible")
+	}
 	for S.WriteTo == nil {
 		// Wait for main simulator routine to initialize channel
 		time.Sleep(0)
