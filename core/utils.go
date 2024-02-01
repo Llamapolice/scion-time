@@ -8,6 +8,7 @@ import (
 	"example.com/scion-time/driver/mbg"
 	"example.com/scion-time/net/scion"
 	"example.com/scion-time/net/udp"
+	"example.com/scion-time/simulation/simutils"
 	"github.com/pelletier/go-toml/v2"
 	"github.com/scionproto/scion/pkg/addr"
 	"github.com/scionproto/scion/pkg/snet"
@@ -105,6 +106,10 @@ func CreateClocks(cfg SvcConfig, localAddr *snet.UDPAddr, log *zap.Logger) (
 	// this for example could be a simulated gps clock
 	// maybe implement this using something like SimReferenceClocks (also then in config)
 	for _, s := range cfg.MBGReferenceClocks {
+		if s[:3] == "sim" {
+			refClocks = append(refClocks, &simutils.SimReferenceClock{Id: s})
+			continue
+		}
 		refClocks = append(refClocks, &mbgReferenceClock{
 			dev: s,
 		})
