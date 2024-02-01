@@ -26,8 +26,9 @@ type SimConnection struct {
 }
 
 type SimPacket struct {
-	B    []byte
-	Addr netip.AddrPort
+	B          []byte
+	TargetAddr netip.AddrPort
+	SourceAddr netip.AddrPort
 }
 
 func (S *SimConnection) Close() error {
@@ -86,14 +87,14 @@ func (S *SimConnection) ReadMsgUDPAddrPort(buf []byte, oob []byte) (
 	//	S.Log.Error("OOBuffer passed to ReadMsgUDPAddrPort is too small", zap.Int("oodata length", len(oodata)), zap.Int("oob capacity", cap(oob)))
 	//}
 
-	addr = msg.Addr
+	addr = msg.SourceAddr
 	return n, 0, 0, addr, nil
 }
 
 func (S *SimConnection) WriteToUDPAddrPort(b []byte, addr netip.AddrPort) (int, error) {
 	//TODO implement me
 	S.Log.Debug("Message to be written", zap.String("connection id", S.Id), zap.Binary("msg", b),
-		zap.String("target addr", addr.String()), zap.String("originating addr", S.LAddr.String()))
+		zap.String("target addr", addr.String()), zap.String("originating addr", S.LAddr.AddrPort().String()))
 	if addr.Port() == 0 {
 		S.Log.Fatal("Writing to port 0 is not possible")
 	}
@@ -101,7 +102,7 @@ func (S *SimConnection) WriteToUDPAddrPort(b []byte, addr netip.AddrPort) (int, 
 		// Wait for main simulator routine to initialize channel
 		time.Sleep(0)
 	}
-	S.WriteTo <- SimPacket{B: b, Addr: addr}
+	S.WriteTo <- SimPacket{B: b, TargetAddr: addr, SourceAddr: S.LAddr.AddrPort()}
 	return len(b), nil
 }
 

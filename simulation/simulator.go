@@ -109,8 +109,12 @@ func newRelay(receiver chan SimPacket) (r Relay) {
 var (
 	log                   *zap.Logger
 	receiver              chan SimPacket
-	handleConnectionSetup func(id string, receiveFromInstance chan SimPacket, sendToInstance chan SimPacket) *SimConnection
-	scanner               *bufio.Scanner
+	handleConnectionSetup func(
+		id string,
+		receiveFromInstance chan SimPacket,
+		sendToInstance chan SimPacket,
+	) *SimConnection
+	scanner *bufio.Scanner
 )
 
 func RunSimulation(
@@ -147,14 +151,14 @@ func RunSimulation(
 		log.Info("\u001B[34mMessage handler started\u001B[0m")
 		for msg := range receiver {
 			log.Debug("Message handler received message", zap.Binary("msg", msg.B),
-				zap.String("target", msg.Addr.String()))
-			receivingInstance, exists := receivingInstances[msg.Addr.String()]
+				zap.String("target", msg.TargetAddr.String()))
+			receivingInstance, exists := receivingInstances[msg.TargetAddr.String()]
 			if exists {
 				receivingInstance <- msg
 				log.Debug("Passed message on to instance")
 			} else {
 				log.Warn("Targeted address does not exist in the map (yet), message dropped",
-					zap.String("target", msg.Addr.String()))
+					zap.String("target", msg.TargetAddr.String()))
 			}
 		}
 		log.Info("\u001B[34mMessage handler terminating\u001B[0m")
@@ -171,8 +175,11 @@ func RunSimulation(
 			senderChan = sendToInstance
 		}
 		tmpConn.ReadFrom = senderChan
-		log.Debug("Subscribing address", zap.String("LocalAddr()", tmpConn.LocalAddr().String()))
-		receivingInstances[tmpConn.LocalAddr().String()] = senderChan
+		log.Debug("Subscribing addresses", zap.String("LocalAddr()", tmpConn.LocalAddr().String()),
+			zap.String("Laddr.AddrPort", tmpConn.LAddr.AddrPort().String()))
+		//zap.String("Laddr.String()", tmpConn.LAddr.String()))
+		receivingInstances[tmpConn.LocalAddr().String()] = senderChan      // both cause im out of ideas for now
+		receivingInstances[tmpConn.LAddr.AddrPort().String()] = senderChan // maybe now it wants this address?
 		return tmpConn
 	}
 
