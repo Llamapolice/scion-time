@@ -1,4 +1,4 @@
-package simulation
+package simutils
 
 import (
 	"example.com/scion-time/base/netprovider"

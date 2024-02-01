@@ -9,6 +9,7 @@ import (
 	"example.com/scion-time/core"
 	"example.com/scion-time/core/netbase"
 	"example.com/scion-time/driver/networking"
+	"example.com/scion-time/simulation/simutils"
 	"flag"
 	"fmt"
 	"github.com/mmcloughlin/profile"
@@ -414,13 +415,13 @@ func runSCIONBenchmark(daemonAddr string, localAddr, remoteAddr *snet.UDPAddr, a
 }
 
 func runSimulation(seed int64, configFile string) {
-	lclk := simulation.NewSimulationClock(seed, log)
+	lclk := simutils.NewSimulationClock(seed, log)
 	timebase.RegisterClock(lclk)
 
 	lcrypt := simulation.NewSimCrypto(seed, log)
 	cryptobase.RegisterCrypto(lcrypt)
 
-	lnet := simulation.NewSimConnector(log)
+	lnet := simutils.NewSimConnector(log)
 	netbase.RegisterNetProvider(lnet)
 
 	simulation.RunSimulation(configFile, lclk, lcrypt, lnet, log)

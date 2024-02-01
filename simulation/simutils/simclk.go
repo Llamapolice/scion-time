@@ -1,7 +1,8 @@
-package simulation
+package simutils
 
 import (
 	"go.uber.org/zap"
+	"golang.org/x/net/context"
 	"math"
 	"time"
 
@@ -9,6 +10,7 @@ import (
 )
 
 type SimClock struct {
+	Id    string
 	seed  int64 // still TODO if this is needed
 	log   *zap.Logger
 	epoch uint64
@@ -21,12 +23,12 @@ func NewSimulationClock(seed int64, log *zap.Logger) *SimClock {
 	return &SimClock{seed: seed, log: log, counter: 0, time: time.Unix(0, 0)}
 }
 
-func (c *SimClock) Epoch() uint64 {
+func (c SimClock) Epoch() uint64 {
 	//TODO implement me
 	return c.epoch
 }
 
-func (c *SimClock) Now() time.Time {
+func (c SimClock) Now() time.Time {
 	//TODO implement me
 	if c.counter > 1000 { // Hack to stop endless looping
 		panic("Hard cutoff point reached")
@@ -38,12 +40,12 @@ func (c *SimClock) Now() time.Time {
 	return time.Unix(0, ns)
 }
 
-func (c *SimClock) MaxDrift(duration time.Duration) time.Duration {
+func (c SimClock) MaxDrift(duration time.Duration) time.Duration {
 	// Copied straight from sysclk_linux.go
 	return math.MaxInt64
 }
 
-func (c *SimClock) Step(offset time.Duration) {
+func (c SimClock) Step(offset time.Duration) {
 	//TODO implement me
 
 	// epoch part copied from sysclk_linux.go, not 100% what that does but probably not necessary
@@ -54,12 +56,12 @@ func (c *SimClock) Step(offset time.Duration) {
 	c.epoch++
 }
 
-func (c *SimClock) Adjust(offset, duration time.Duration, frequency float64) {
+func (c SimClock) Adjust(offset, duration time.Duration, frequency float64) {
 	//TODO implement me
 	panic("SimClock.Adjust(): implement me")
 }
 
-func (c *SimClock) Sleep(duration time.Duration) {
+func (c SimClock) Sleep(duration time.Duration) {
 	//TODO implement me correctly
 	duration = time.Second
 	duration *= 15 // slowed down for debugging/construction purposes
@@ -68,3 +70,11 @@ func (c *SimClock) Sleep(duration time.Duration) {
 }
 
 var _ timebase.LocalClock = (*SimClock)(nil)
+
+type SimReferenceClock struct {
+	Id string
+}
+
+func (s *SimReferenceClock) MeasureClockOffset(ctx context.Context, log *zap.Logger) (time.Duration, error) {
+	return 0, nil
+}

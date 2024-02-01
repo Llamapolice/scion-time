@@ -2,6 +2,7 @@ package sync
 
 import (
 	"context"
+	"example.com/scion-time/simulation/simutils"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -99,8 +100,13 @@ func RunLocalClockSync(log *zap.Logger, lclk timebase.LocalClock, syncClks *Sync
 	if maxCorr <= 0 {
 		panic("invalid reference clock max correction")
 	}
+	name := metrics.SyncLocalCorrN
+	if simClk, ok := lclk.(*simutils.SimClock); ok {
+		log.Debug("SimClock detected, adding id to prometheus gauge", zap.String("id", simClk.Id))
+		name += simClk.Id
+	}
 	corrGauge := promauto.NewGauge(prometheus.GaugeOpts{
-		Name: metrics.SyncLocalCorrN,
+		Name: name,
 		Help: metrics.SyncLocalCorrH,
 	})
 	pll := newPLL(log, lclk)
