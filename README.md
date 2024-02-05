@@ -27,7 +27,7 @@ In Proceedings of the Symposium on Reliable Distributed Systems (SRDS) 2022.
 
 ## Running a simple IP-based server
 
-Reference platform: Ubuntu 22.04 LTS, Go 1.21.5; see [below](https://github.com/marcfrei/scion-time/edit/main/README.md#installing-prerequisites-for-a-scion-test-environment).
+Reference platform: Ubuntu 22.04 LTS, Go 1.21; see [below](https://github.com/marcfrei/scion-time/edit/main/README.md#installing-prerequisites-for-a-scion-test-environment).
 
 ```bash
 cd ~
@@ -73,10 +73,10 @@ On x86-64:
 
 ```bash
 sudo rm -rf /usr/local/go
-curl -LO https://golang.org/dl/go1.21.5.linux-amd64.tar.gz
-echo "e2bc0b3e4b64111ec117295c088bde5f00eeed1567999ff77bc859d7df70078e go1.21.5.linux-amd64.tar.gz" | sha256sum -c
-sudo tar -C /usr/local -xzf go1.21.5.linux-amd64.tar.gz
-rm go1.21.5.linux-amd64.tar.gz
+curl -LO https://golang.org/dl/go1.21.6.linux-amd64.tar.gz
+echo "3f934f40ac360b9c01f616a9aa1796d227d8b0328bf64cb045c7b8c4ee9caea4 go1.21.6.linux-amd64.tar.gz" | sha256sum -c
+sudo tar -C /usr/local -xzf go1.21.6.linux-amd64.tar.gz
+rm go1.21.6.linux-amd64.tar.gz
 echo >> .bash_profile
 echo 'export PATH=$PATH:/usr/local/go/bin' >> .bash_profile
 source ~/.bash_profile
@@ -87,10 +87,10 @@ On ARM64:
 
 ```bash
 sudo rm -rf /usr/local/go
-curl -LO https://golang.org/dl/go1.21.5.linux-arm64.tar.gz
-echo "841cced7ecda9b2014f139f5bab5ae31785f35399f236b8b3e75dff2a2978d96 go1.21.5.linux-arm64.tar.gz" | sha256sum -c
-sudo tar -C /usr/local -xzf go1.21.5.linux-arm64.tar.gz
-rm go1.21.5.linux-arm64.tar.gz
+curl -LO https://golang.org/dl/go1.21.6.linux-arm64.tar.gz
+echo "e2e8aa88e1b5170a0d495d7d9c766af2b2b6c6925a8f8956d834ad6b4cacbd9a go1.21.6.linux-arm64.tar.gz" | sha256sum -c
+sudo tar -C /usr/local -xzf go1.21.6.linux-arm64.tar.gz
+rm go1.21.6.linux-arm64.tar.gz
 echo >> .bash_profile
 echo 'export PATH=$PATH:/usr/local/go/bin' >> .bash_profile
 source ~/.bash_profile
