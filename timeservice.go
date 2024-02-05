@@ -418,7 +418,7 @@ func runSimulation(seed int64, configFile string) {
 	lclk := simutils.NewSimulationClock(seed, log)
 	timebase.RegisterClock(lclk)
 
-	lcrypt := simulation.NewSimCrypto(seed, log)
+	lcrypt := simutils.NewSimCrypto(seed, log)
 	cryptobase.RegisterCrypto(lcrypt)
 
 	lnet := simutils.NewSimConnector(log)
