@@ -53,7 +53,7 @@ func RunIPBenchmark(localAddr, remoteAddr *net.UDPAddr, authModes []string, ntsk
 			defer wg.Done()
 			<-sg
 			for j := numRequestPerClient; j > 0; j-- {
-				_, err = client.MeasureClockOffsetIP(ctx, log, c, localAddr, remoteAddr)
+				_, _, err = client.MeasureClockOffsetIP(ctx, log, c, localAddr, remoteAddr)
 				if err != nil {
 					log.Info("failed to measure clock offset", zap.Error(err))
 				}

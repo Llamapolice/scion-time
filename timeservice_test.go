@@ -71,7 +71,7 @@ func TestTimeserviceNTSChrony(t *testing.T) {
 	c.Auth.NTSKEFetcher.Port = ntskePort
 	c.Auth.NTSKEFetcher.Log = log
 
-	_, err = client.MeasureClockOffsetIP(ctx, log, c, laddr, raddr)
+	_, _, err = client.MeasureClockOffsetIP(ctx, log, c, laddr, raddr)
 	if err != nil {
 		t.Fatalf("failed to measure clock offset %v", err)
 	}

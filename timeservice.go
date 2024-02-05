@@ -202,7 +202,8 @@ func newNTPReferenceClockIP(localAddr, remoteAddr *net.UDPAddr, dscp uint8,
 
 func (c *ntpReferenceClockIP) MeasureClockOffset(ctx context.Context, log *zap.Logger) (
 	time.Duration, error) {
-	return client.MeasureClockOffsetIP(ctx, log, c.ntpc, c.localAddr, c.remoteAddr)
+	_, off, err := client.MeasureClockOffsetIP(ctx, log, c.ntpc, c.localAddr, c.remoteAddr)
+	return off, err
 }
 
 func configureSCIONClientNTS(c *client.SCIONClient, ntskeServer string, ntskeInsecureSkipVerify bool, daemonAddr string, localAddr, remoteAddr udp.UDPAddr) {
@@ -548,8 +549,7 @@ func runClient(configFile string) {
 }
 
 func runIPTool(localAddr, remoteAddr *snet.UDPAddr, dscp uint8,
-	authModes []string, ntskeServer string, ntskeInsecureSkipVerify bool) {
-	var err error
+	authModes []string, ntskeServer string, ntskeInsecureSkipVerify, periodic bool) {
 	ctx := context.Background()
 
 	lclk := &clock.SystemClock{Log: log}
@@ -571,9 +571,16 @@ func runIPTool(localAddr, remoteAddr *snet.UDPAddr, dscp uint8,
 		configureIPClientNTS(c, ntskeServer, ntskeInsecureSkipVerify)
 	}
 
-	_, err = client.MeasureClockOffsetIP(ctx, log, c, laddr, raddr)
-	if err != nil {
-		log.Fatal("failed to measure clock offset", zap.Stringer("to", raddr), zap.Error(err))
+	for {
+		at, off, err := client.MeasureClockOffsetIP(ctx, log, c, laddr, raddr)
+		if err != nil {
+			log.Fatal("failed to measure clock offset", zap.Stringer("to", raddr), zap.Error(err))
+		}
+		if !periodic {
+			break
+		}
+		fmt.Printf("%s,%+.9f,%t\n", at.UTC().Format(time.RFC3339), off.Seconds(), c.InInterleavedMode())
+		lclk.Sleep(1 * time.Second)
 	}
 }
 
@@ -767,6 +774,7 @@ func main() {
 		authModesStr            string
 		ntskeInsecureSkipVerify bool
 		profileCPU              bool
+		periodic                bool
 	)
 
 	serverFlags := flag.NewFlagSet("server", flag.ExitOnError)
@@ -794,6 +802,7 @@ func main() {
 	toolFlags.UintVar(&dscp, "dscp", 0, "Differentiated services codepoint, must be in range [0, 63]")
 	toolFlags.StringVar(&authModesStr, "auth", "", "Authentication modes")
 	toolFlags.BoolVar(&ntskeInsecureSkipVerify, "ntske-insecure-skip-verify", false, "Skip NTSKE verification")
+	toolFlags.BoolVar(&periodic, "periodic", false, "Perform periodic offset measurements")
 
 	benchmarkFlags.BoolVar(&verbose, "verbose", false, "Verbose logging")
 	benchmarkFlags.StringVar(&configFile, "config", "", "Config file")
@@ -880,7 +889,7 @@ func main() {
 			ntskeServer := ntskeServerFromRemoteAddr(remoteAddrStr)
 			initLogger(verbose)
 			runIPTool(&localAddr, &remoteAddr, uint8(dscp),
-				authModes, ntskeServer, ntskeInsecureSkipVerify)
+				authModes, ntskeServer, ntskeInsecureSkipVerify, periodic)
 		}
 	case benchmarkFlags.Name():
 		err := benchmarkFlags.Parse(os.Args[2:])

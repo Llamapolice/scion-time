@@ -346,8 +346,19 @@ func listenUDP(ctx context.Context, localAddr udp.UDPAddr) (net.PacketConn, erro
 	return conn, nil
 }
 
+type QUICListener struct {
+	*quic.Listener
+	conn net.PacketConn
+}
+
+func (l *QUICListener) Close() error {
+	err := l.Listener.Close()
+	_ = l.conn.Close()
+	return err
+}
+
 func ListenQUIC(ctx context.Context, localAddr udp.UDPAddr,
-	tlsCfg *tls.Config, quicCfg *quic.Config) (*quic.Listener, error) {
+	tlsCfg *tls.Config, quicCfg *quic.Config) (*QUICListener, error) {
 	conn, err := listenUDP(ctx, localAddr)
 	if err != nil {
 		return nil, err
@@ -358,12 +369,12 @@ func ListenQUIC(ctx context.Context, localAddr udp.UDPAddr,
 	if quicCfg.KeepAlivePeriod == 0 || quicCfg.KeepAlivePeriod > maxIdleTicks {
 		quicCfg.KeepAlivePeriod = maxIdleTicks * tickPeriod
 	}
-	l, err := quic.Listen(conn, tlsCfg, quicCfg)
+	qlistener, err := quic.Listen(conn, tlsCfg, quicCfg)
 	if err != nil {
 		conn.Close()
 		return nil, err
 	}
-	return l, nil
+	return &QUICListener{qlistener, conn}, nil
 }
 
 type clientConn struct {
@@ -435,7 +446,7 @@ type QUICConnection struct {
 	net.PacketConn
 }
 
-func (c QUICConnection) CloseWithError(code quic.ApplicationErrorCode, desc string) error {
+func (c *QUICConnection) CloseWithError(code quic.ApplicationErrorCode, desc string) error {
 	err := c.Connection.CloseWithError(code, desc)
 	_ = c.PacketConn.Close()
 	return err
