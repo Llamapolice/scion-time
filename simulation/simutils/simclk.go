@@ -1,6 +1,7 @@
 package simutils
 
 import (
+	"example.com/scion-time/core/client"
 	"go.uber.org/zap"
 	"golang.org/x/net/context"
 	"math"
@@ -10,17 +11,18 @@ import (
 )
 
 type SimClock struct {
-	Id    string
-	seed  int64 // still TODO if this is needed
-	log   *zap.Logger
-	epoch uint64
-	time  time.Time
+	Id      string
+	seed    int64 // still TODO if this is needed
+	log     *zap.Logger
+	epoch   uint64
+	time    time.Time
+	request chan TimeRequest
 
 	counter int // See Now() below, temporary hack to stop unlimited execution
 }
 
-func NewSimulationClock(seed int64, log *zap.Logger) *SimClock {
-	return &SimClock{seed: seed, log: log, counter: 0, time: time.Unix(0, 0)}
+func NewSimulationClock(seed int64, log *zap.Logger, request chan TimeRequest) *SimClock {
+	return &SimClock{seed: seed, log: log, counter: 0, time: time.Unix(0, 0), request: request}
 }
 
 func (c SimClock) Epoch() uint64 {
@@ -30,14 +32,18 @@ func (c SimClock) Epoch() uint64 {
 
 func (c SimClock) Now() time.Time {
 	//TODO implement me
-	if c.counter > 1000 { // Hack to stop endless looping
-		panic("Hard cutoff point reached")
-	}
-	c.counter++
-	var ns int64 = c.time.UnixNano()
-	c.time = c.time.Add(time.Duration(1e9))
-	c.log.Debug("Time is now", zap.Int64("ns", ns), zap.String("clock id", c.Id))
-	return time.Unix(0, ns)
+	//if c.counter > 1000 { // Hack to stop endless looping
+	//	panic("Hard cutoff point reached")
+	//}
+	//c.counter++
+	//var ns int64 = c.time.UnixNano()
+	//c.time = c.time.Add(time.Duration(1e9))
+	//c.log.Debug("Time is now", zap.Int64("ns", ns), zap.String("clock id", c.Id))
+	//return time.Unix(0, ns)
+	ans := make(chan time.Time)
+	defer close(ans)
+	c.request <- TimeRequest{ReturnChan: ans}
+	return <-ans
 }
 
 func (c SimClock) MaxDrift(duration time.Duration) time.Duration {
@@ -78,3 +84,5 @@ type SimReferenceClock struct {
 func (s *SimReferenceClock) MeasureClockOffset(ctx context.Context, log *zap.Logger) (time.Duration, error) {
 	return time.Second, nil
 }
+
+var _ client.ReferenceClock = (*SimReferenceClock)(nil)

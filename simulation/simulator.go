@@ -34,6 +34,7 @@ type Instance struct {
 	ReceiveFromInstance chan simutils.SimPacket
 	SendToInstance      chan simutils.SimPacket
 	Conn                *simutils.SimConnection
+	LocalClk            *simutils.SimClock
 	SyncClks            *sync.SyncableClocks
 }
 
@@ -114,21 +115,20 @@ var (
 		receiveFromInstance chan simutils.SimPacket,
 		sendToInstance chan simutils.SimPacket,
 	) *simutils.SimConnection
-	scanner *bufio.Scanner
+	scanner      *bufio.Scanner
+	timeRequests chan simutils.TimeRequest
 )
 
 func RunSimulation(
 	configFile string,
-	lclk timebase.LocalClock,
-	lcrypt cryptobase.CryptoProvider,
-	lnet netprovider.ConnProvider,
+	seed int64,
 	logger *zap.Logger,
 ) {
 	log = logger
-	simClk, ok := lclk.(*simutils.SimClock)
-	if !ok {
-		log.Fatal("Simulator did not receive a SimClock")
-	}
+	//simClk, ok := lclk.(*simutils.SimClock)
+	//if !ok {
+	//	log.Fatal("Simulator did not receive a SimClock")
+	//}
 	log.Info("\u001B[34mStarting simulation\u001B[0m")
 	scanner = bufio.NewScanner(os.Stdin)
 
@@ -170,6 +170,20 @@ func RunSimulation(
 		log.Info("\u001B[34mMessage handler terminating\u001B[0m")
 	}()
 
+	// Sketch for a ground time provider
+	timeRequests = make(chan simutils.TimeRequest)
+
+	go func() {
+		log.Info("Time handler started")
+		now := time.Unix(10000, 0)
+		for {
+			select {
+			case req := <-timeRequests:
+				req.ReturnChan <- now
+			}
+		}
+	}()
+
 	// Helper func to do the repetitive part of handling connections
 	// Not a standalone function to not have to pass the connection listener and receiver map all the time
 	handleConnectionSetup = func(id string, receiveFromInstance, sendToInstance chan simutils.SimPacket) *simutils.SimConnection {
@@ -193,7 +207,7 @@ func RunSimulation(
 	simServers := make([]Server, len(cfg.Servers))
 
 	for i, simServer := range cfg.Servers {
-		tmp := serverSetUp(i, simServer, simClk)
+		tmp := serverSetUp(i, simServer)
 		simServers[i] = tmp
 		log.Debug("\u001B[34mDone setting up server, press Enter to continue\u001B[0m",
 			zap.String("server id", tmp.Id))
@@ -207,7 +221,7 @@ func RunSimulation(
 	simRelays := make([]Relay, len(cfg.Relays))
 
 	for i, relay := range cfg.Relays {
-		tmp := relaySetUp(i, relay, simClk)
+		tmp := relaySetUp(i, relay)
 
 		simRelays[i] = tmp
 		log.Debug("\u001B[34mDone setting up relay, press Enter to continue\u001B[0m",
@@ -221,7 +235,7 @@ func RunSimulation(
 		zap.Int("amount", len(cfg.Clients)))
 	simClients := make([]Client, len(cfg.Clients))
 	for i, clnt := range cfg.Clients {
-		tmp := clientSetUp(i, clnt, simClk)
+		tmp := clientSetUp(i, clnt)
 
 		simClients[i] = tmp
 		log.Debug("\u001B[34mDone setting up client, press Enter to continue\u001B[0m",
@@ -279,11 +293,13 @@ func RunSimulation(
 	select {}
 }
 
-func clientSetUp(i int, clnt core.SvcConfig, simClk *simutils.SimClock) Client {
+func clientSetUp(i int, clnt core.SvcConfig) Client {
 	log.Debug("Setting up client", zap.Int("client", i))
 	tmp := newClient(receiver)
 	tmp.Id += strconv.Itoa(i)
 
+	simClk := simutils.NewSimulationClock(int64(i), log, timeRequests)
+	tmp.LocalClk = simClk
 	laddr := core.LocalAddress(clnt)
 	laddr.Host.Port = 0
 	refClocks, netClocks := core.CreateClocks(clnt, laddr, simClk, log)
@@ -318,11 +334,14 @@ func clientSetUp(i int, clnt core.SvcConfig, simClk *simutils.SimClock) Client {
 	return tmp
 }
 
-func relaySetUp(i int, relay core.SvcConfig, simClk *simutils.SimClock) Relay {
+func relaySetUp(i int, relay core.SvcConfig) Relay {
 	log.Debug("\u001B[34mSetting up relay\u001B[0m", zap.Int("relay", i))
 	tmp := newRelay(receiver)
 	tmp.Id = tmp.Id + strconv.Itoa(i)
+
 	localAddr := core.LocalAddress(relay)
+	simClk := simutils.NewSimulationClock(int64(i), log, timeRequests)
+	tmp.LocalClk = simClk
 
 	// Clock Sync
 	log.Debug("Starting clock sync")
@@ -357,11 +376,14 @@ func relaySetUp(i int, relay core.SvcConfig, simClk *simutils.SimClock) Relay {
 	return tmp
 }
 
-func serverSetUp(i int, simServer core.SvcConfig, simClk *simutils.SimClock) Server {
+func serverSetUp(i int, simServer core.SvcConfig) Server {
 	log.Debug("\u001B[34mSetting up server\u001B[0m", zap.Int("server", i))
 	tmp := newServer(receiver)
 	tmp.Id = tmp.Id + strconv.Itoa(i)
+
 	localAddr := core.LocalAddress(simServer)
+	simClk := simutils.NewSimulationClock(int64(i), log, timeRequests)
+	tmp.LocalClk = simClk
 
 	// Clock Sync
 	log.Debug("Starting clock sync")

@@ -25,12 +25,6 @@ type SimConnection struct {
 	PortReleaseMsgChan chan PortReleaseMsg
 }
 
-type SimPacket struct {
-	B          []byte
-	TargetAddr netip.AddrPort
-	SourceAddr netip.AddrPort
-}
-
 func (S *SimConnection) Close() error {
 	//TODO implement me
 	S.Log.Debug("Closing SimConnection", zap.String("conn id", S.Id))

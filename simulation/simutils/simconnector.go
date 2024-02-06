@@ -16,11 +16,6 @@ import (
 	"time"
 )
 
-type PortReleaseMsg struct {
-	Owner string
-	Port  int
-}
-
 type SimConnector struct {
 	CallBack chan *SimConnection
 
@@ -198,11 +193,3 @@ func (s *SimConnector) ListenPacket(network string, address string) (netprovider
 }
 
 var _ netprovider.ConnProvider = (*SimConnector)(nil)
-
-type SimConnectorError struct {
-	errString string
-}
-
-func (e SimConnectorError) Error() string {
-	return e.errString
-}
