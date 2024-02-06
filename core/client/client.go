@@ -12,7 +12,7 @@ import (
 	"go.uber.org/zap"
 
 	"example.com/scion-time/base/timemath"
-	"example.com/scion-time/core/cryptobase"
+	"example.com/scion-time/core/cryptocore"
 	"example.com/scion-time/net/scion"
 	"example.com/scion-time/net/udp"
 )
@@ -107,7 +107,7 @@ func MeasureClockOffsetSCION(ctx context.Context, log *zap.Logger,
 	mtrcs := scionMetrics.Load()
 
 	sps := make([]snet.Path, len(ntpcs))
-	n, err := cryptobase.Sample(ctx, len(sps), len(ps), func(dst, src int) {
+	n, err := cryptocore.Sample(ctx, len(sps), len(ps), func(dst, src int) {
 		sps[dst] = ps[src]
 	})
 	if err != nil {

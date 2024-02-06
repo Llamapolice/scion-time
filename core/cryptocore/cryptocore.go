@@ -1,4 +1,4 @@
-package cryptobase
+package cryptocore
 
 import (
 	"context"

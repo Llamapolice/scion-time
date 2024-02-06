@@ -3,11 +3,10 @@ package simulation
 import (
 	"bufio"
 	"context"
-	"example.com/scion-time/base/cryptobase"
-	"example.com/scion-time/base/netprovider"
-	"example.com/scion-time/base/timebase"
 	"example.com/scion-time/core"
 	"example.com/scion-time/core/client"
+	"example.com/scion-time/core/cryptocore"
+	"example.com/scion-time/core/netcore"
 	"example.com/scion-time/core/server"
 	"example.com/scion-time/core/sync"
 	"example.com/scion-time/net/ntp"
@@ -133,6 +132,12 @@ func RunSimulation(
 	log.Info("\u001B[34mStarting simulation\u001B[0m")
 	scanner = bufio.NewScanner(os.Stdin)
 
+	lcrypt := simutils.NewSimCrypto(seed, log)
+	cryptocore.RegisterCrypto(lcrypt)
+
+	simConnector := simutils.NewSimConnector(log)
+	netcore.RegisterNetProvider(simConnector)
+
 	// Some logic to read a config file and fill a settings struct
 	log.Debug("Reading config file", zap.String("config location", configFile))
 	var cfg SimConfigFile
@@ -142,10 +147,6 @@ func RunSimulation(
 	// Register some channels into the sims
 	// Size 2 as to not block since the connection is opened within the main routine
 	simConnectionListener := make(chan *simutils.SimConnection, 2)
-	simConnector, ok := lnet.(*simutils.SimConnector)
-	if !ok {
-		log.Fatal("Non-simulated connector passed into simulation")
-	}
 	simConnector.CallBack = simConnectionListener
 
 	receivingInstances := make(map[string]chan simutils.SimPacket)
@@ -233,6 +234,7 @@ func RunSimulation(
 	log.Info("\u001B[34mPress Enter to run tool\u001B[0m")
 	scanner.Scan()
 	ctxClient := context.Background()
+	lclk := simutils.NewSimulationClock(seed, log, timeRequests)
 	var laddr udp.UDPAddr
 	var raddr udp.UDPAddr
 	var laddrSNET snet.UDPAddr

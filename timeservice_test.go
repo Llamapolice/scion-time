@@ -4,7 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"example.com/scion-time/base/crypto"
-	"example.com/scion-time/core/cryptobase"
+	"example.com/scion-time/core/cryptocore"
 	"example.com/scion-time/core/netcore"
 	"example.com/scion-time/driver/networking"
 	"net"
@@ -46,7 +46,7 @@ func TestTimeserviceNTSChrony(t *testing.T) {
 	timecore.RegisterClock(lclk)
 
 	lcrypt := &crypto.SafeCrypto{}
-	cryptobase.RegisterCrypto(lcrypt)
+	cryptocore.RegisterCrypto(lcrypt)
 
 	lnet := &networking.UDPConnector{}
 	netcore.RegisterNetProvider(lnet)
