@@ -25,5 +25,18 @@ type SimPacket struct {
 }
 
 type TimeRequest struct {
+	Id         string
 	ReturnChan chan time.Time
+}
+
+type WaitRequest struct {
+	Id            string
+	SleepDuration time.Duration
+	Unblock       chan interface{}
+}
+
+type DeadlineRequest struct {
+	Id       string
+	Deadline time.Time
+	Unblock  chan interface{}
 }

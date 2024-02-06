@@ -21,6 +21,8 @@ import (
 	"time"
 )
 
+const maxNumberOfInstances = 30
+
 type SimConfigFile struct {
 	// TODO, WIP
 	Servers []core.SvcConfig `toml:"servers"`
@@ -115,8 +117,10 @@ var (
 		receiveFromInstance chan simutils.SimPacket,
 		sendToInstance chan simutils.SimPacket,
 	) *simutils.SimConnection
-	scanner      *bufio.Scanner
-	timeRequests chan simutils.TimeRequest
+	scanner          *bufio.Scanner
+	timeRequests     chan simutils.TimeRequest
+	waitRequests     chan simutils.WaitRequest
+	deadlineRequests chan simutils.DeadlineRequest
 )
 
 func RunSimulation(
@@ -124,18 +128,19 @@ func RunSimulation(
 	seed int64,
 	logger *zap.Logger,
 ) {
+	// Set up file package vars
 	log = logger
-	//simClk, ok := lclk.(*simutils.SimClock)
-	//if !ok {
-	//	log.Fatal("Simulator did not receive a SimClock")
-	//}
 	log.Info("\u001B[34mStarting simulation\u001B[0m")
+	receiver = make(chan simutils.SimPacket)
 	scanner = bufio.NewScanner(os.Stdin)
+	timeRequests = make(chan simutils.TimeRequest)
+	waitRequests = make(chan simutils.WaitRequest)
+	deadlineRequests = make(chan simutils.DeadlineRequest)
 
 	lcrypt := simutils.NewSimCrypto(seed, log)
 	cryptocore.RegisterCrypto(lcrypt)
 
-	simConnector := simutils.NewSimConnector(log)
+	simConnector := simutils.NewSimConnector(log, deadlineRequests)
 	netcore.RegisterNetProvider(simConnector)
 
 	// Some logic to read a config file and fill a settings struct
@@ -150,14 +155,17 @@ func RunSimulation(
 	simConnector.CallBack = simConnectionListener
 
 	receivingInstances := make(map[string]chan simutils.SimPacket)
-	receiver = make(chan simutils.SimPacket)
 
 	// Bare-bones message handler to pass messages around
 	go func() {
 		log.Info("\u001B[34mMessage handler started\u001B[0m")
 		for msg := range receiver {
-			log.Debug("Message handler received message", zap.Binary("msg", msg.B),
-				zap.String("target", msg.TargetAddr.String()))
+			log.Debug(
+				"Message handler received message",
+				zap.Binary("msg", msg.B),
+				zap.String("target", msg.TargetAddr.String()),
+				zap.String("source", msg.SourceAddr.String()),
+			)
 			receivingInstance, exists := receivingInstances[msg.TargetAddr.String()]
 			if exists {
 				receivingInstance <- msg
@@ -171,15 +179,50 @@ func RunSimulation(
 	}()
 
 	// Sketch for a ground time provider
-	timeRequests = make(chan simutils.TimeRequest)
-
 	go func() {
 		log.Info("Time handler started")
 		now := time.Unix(10000, 0)
+		currentlyWaiting := make([]simutils.WaitRequest, 0, maxNumberOfInstances)
+		deadlines := make([]simutils.DeadlineRequest, 0, maxNumberOfInstances*3) // 3 connections max per instance sounds reasonable?
 		for {
 			select {
 			case req := <-timeRequests:
 				req.ReturnChan <- now
+			case req := <-waitRequests:
+				currentlyWaiting = append(currentlyWaiting, req)
+			case req := <-deadlineRequests:
+				deadlines = append(deadlines, req)
+			default:
+				time.Sleep(time.Second) // TODO just for development
+				//if len(currentlyWaiting) == simutils.NumberOfClocks {
+				if len(currentlyWaiting) > 0 {
+					minDuration := time.Hour
+					minIndex := 10000000
+					for i, request := range currentlyWaiting {
+						if request.SleepDuration < minDuration {
+							minIndex = i
+							minDuration = request.SleepDuration
+						}
+					}
+					shortestRequest := currentlyWaiting[minIndex]
+					currentlyWaiting = append(currentlyWaiting[:minIndex], currentlyWaiting[minIndex+1:]...)
+					for _, request := range currentlyWaiting {
+						request.SleepDuration -= minDuration
+					}
+					now = now.Add(minDuration)
+					log.Debug("Time handler unblocks a sleeper", zap.String("id", shortestRequest.Id))
+					shortestRequest.Unblock <- struct{}{}
+				}
+				is := make([]int, len(deadlines))
+				for i, deadline := range deadlines {
+					if deadline.Deadline.Before(now) {
+						deadline.Unblock <- struct{}{}
+						is = append(is, i)
+					}
+				}
+				for _, i := range is {
+					deadlines = append(deadlines[:i], deadlines[i+1:]...)
+				}
 			}
 		}
 	}()
@@ -248,7 +291,7 @@ func RunSimulation(
 	log.Info("\u001B[34mPress Enter to run tool\u001B[0m")
 	scanner.Scan()
 	ctxClient := context.Background()
-	lclk := simutils.NewSimulationClock(seed, log, timeRequests)
+	lclk := simutils.NewSimulationClock(seed, log, timeRequests, waitRequests)
 	var laddr udp.UDPAddr
 	var raddr udp.UDPAddr
 	var laddrSNET snet.UDPAddr
@@ -298,7 +341,7 @@ func clientSetUp(i int, clnt core.SvcConfig) Client {
 	tmp := newClient(receiver)
 	tmp.Id += strconv.Itoa(i)
 
-	simClk := simutils.NewSimulationClock(int64(i), log, timeRequests)
+	simClk := simutils.NewSimulationClock(int64(i), log, timeRequests, waitRequests)
 	tmp.LocalClk = simClk
 	laddr := core.LocalAddress(clnt)
 	laddr.Host.Port = 0
@@ -340,7 +383,7 @@ func relaySetUp(i int, relay core.SvcConfig) Relay {
 	tmp.Id = tmp.Id + strconv.Itoa(i)
 
 	localAddr := core.LocalAddress(relay)
-	simClk := simutils.NewSimulationClock(int64(i), log, timeRequests)
+	simClk := simutils.NewSimulationClock(int64(i), log, timeRequests, waitRequests)
 	tmp.LocalClk = simClk
 
 	// Clock Sync
@@ -382,7 +425,7 @@ func serverSetUp(i int, simServer core.SvcConfig) Server {
 	tmp.Id = tmp.Id + strconv.Itoa(i)
 
 	localAddr := core.LocalAddress(simServer)
-	simClk := simutils.NewSimulationClock(int64(i), log, timeRequests)
+	simClk := simutils.NewSimulationClock(int64(i), log, timeRequests, waitRequests)
 	tmp.LocalClk = simClk
 
 	// Clock Sync

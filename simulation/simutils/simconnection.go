@@ -23,6 +23,7 @@ type SimConnection struct {
 	Network            string
 	LAddr              *net.UDPAddr
 	PortReleaseMsgChan chan PortReleaseMsg
+	RequestDeadline    chan DeadlineRequest
 }
 
 func (S *SimConnection) Close() error {
@@ -111,7 +112,10 @@ func (S *SimConnection) SetDeadline(t time.Time) error {
 	sleepDuration := time.Until(t)
 	useCounter := S.UseCounter
 	go func() {
-		time.Sleep(sleepDuration)
+		//time.Sleep(sleepDuration)
+		unblock := make(chan interface{})
+		S.RequestDeadline <- DeadlineRequest{Id: S.Id, Deadline: t, Unblock: unblock}
+		<-unblock
 		if S.UseCounter != useCounter {
 			S.Log.Debug("Already closed connection timed out",
 				zap.String("conn id", S.Id))

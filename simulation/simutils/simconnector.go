@@ -16,16 +16,6 @@ import (
 	"time"
 )
 
-type SimConnector struct {
-	CallBack chan *SimConnection
-
-	log                *zap.Logger
-	port               int
-	ports              map[string]int
-	connections        map[string]*SimConnection
-	portReleaseMsgChan chan PortReleaseMsg
-}
-
 type SimDaemonConnector struct {
 	Ctx        context.Context
 	DaemonAddr string
@@ -86,6 +76,17 @@ func (s SimDaemonConnector) Close() error {
 
 var _ daemon.Connector = (*SimDaemonConnector)(nil)
 
+type SimConnector struct {
+	CallBack chan *SimConnection
+
+	log                *zap.Logger
+	port               int
+	ports              map[string]int
+	connections        map[string]*SimConnection
+	portReleaseMsgChan chan PortReleaseMsg
+	requestDeadline    chan DeadlineRequest
+}
+
 func (s *SimConnector) NewDaemonConnector(ctx context.Context, daemonAddr string) daemon.Connector {
 	var laddrIA addr.IA
 	s.log.Debug("New daemon connector being requested",
@@ -102,7 +103,7 @@ func (s *SimConnector) NewDaemonConnector(ctx context.Context, daemonAddr string
 	}
 }
 
-func NewSimConnector(log *zap.Logger) *SimConnector {
+func NewSimConnector(log *zap.Logger, requestDeadline chan DeadlineRequest) *SimConnector {
 	log.Info("Creating a new sim connector")
 	portChan := make(chan PortReleaseMsg)
 	ports := make(map[string]int)
@@ -118,6 +119,7 @@ func NewSimConnector(log *zap.Logger) *SimConnector {
 		connections:        make(map[string]*SimConnection),
 		ports:              ports,
 		portReleaseMsgChan: portChan,
+		requestDeadline:    requestDeadline,
 	}
 }
 
@@ -151,6 +153,7 @@ func (s *SimConnector) ListenUDP(network string, laddr *net.UDPAddr) (netprovide
 		LAddr:              laddr,
 		Closed:             false,
 		PortReleaseMsgChan: s.portReleaseMsgChan,
+		RequestDeadline:    s.requestDeadline,
 	}
 	s.connections[network+laddr.String()] = simConn
 	s.CallBack <- simConn
