@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
+	"example.com/scion-time/base/timebase"
 	"example.com/scion-time/core/client"
 	"example.com/scion-time/driver/mbg"
 	"example.com/scion-time/net/scion"
@@ -99,7 +100,7 @@ func LoadConfig[T any](cfgStruct T, configFile string, log *zap.Logger) { // T i
 }
 
 // Originally in timeservice.go
-func CreateClocks(cfg SvcConfig, localAddr *snet.UDPAddr, log *zap.Logger) (
+func CreateClocks(cfg SvcConfig, localAddr *snet.UDPAddr, lclk timebase.LocalClock, log *zap.Logger) (
 	refClocks, netClocks []client.ReferenceClock) {
 	dscp := Dscp(cfg)
 
@@ -128,6 +129,7 @@ func CreateClocks(cfg SvcConfig, localAddr *snet.UDPAddr, log *zap.Logger) (
 				cfg.DaemonAddr,
 				udp.UDPAddrFromSnet(localAddr),
 				udp.UDPAddrFromSnet(remoteAddr),
+				lclk,
 				dscp,
 				cfg.AuthModes,
 				ntskeServer,
@@ -139,6 +141,7 @@ func CreateClocks(cfg SvcConfig, localAddr *snet.UDPAddr, log *zap.Logger) (
 			refClocks = append(refClocks, NewNTPReferenceClockIP(
 				localAddr.Host,
 				remoteAddr.Host,
+				lclk,
 				dscp,
 				cfg.AuthModes,
 				ntskeServer,
@@ -161,6 +164,7 @@ func CreateClocks(cfg SvcConfig, localAddr *snet.UDPAddr, log *zap.Logger) (
 			cfg.DaemonAddr,
 			udp.UDPAddrFromSnet(localAddr),
 			udp.UDPAddrFromSnet(remoteAddr),
+			lclk,
 			dscp,
 			cfg.AuthModes,
 			ntskeServer,
@@ -266,7 +270,7 @@ func DaemonAddress(cfg SvcConfig) string {
 	return da
 }
 
-func NewNTPReferenceClockSCION(daemonAddr string, localAddr, remoteAddr udp.UDPAddr, dscp uint8,
+func NewNTPReferenceClockSCION(daemonAddr string, localAddr, remoteAddr udp.UDPAddr, lclk timebase.LocalClock, dscp uint8,
 	authModes []string, ntskeServer string, ntskeInsecureSkipVerify bool, log *zap.Logger) *NtpReferenceClockSCION {
 	c := &NtpReferenceClockSCION{
 		localAddr:  localAddr,
@@ -274,6 +278,7 @@ func NewNTPReferenceClockSCION(daemonAddr string, localAddr, remoteAddr udp.UDPA
 	}
 	for i := 0; i != len(c.ntpcs); i++ {
 		c.ntpcs[i] = &client.SCIONClient{
+			Lclk:            lclk,
 			DSCP:            dscp,
 			InterleavedMode: true,
 		}
@@ -284,13 +289,14 @@ func NewNTPReferenceClockSCION(daemonAddr string, localAddr, remoteAddr udp.UDPA
 	return c
 }
 
-func NewNTPReferenceClockIP(localAddr, remoteAddr *net.UDPAddr, dscp uint8,
+func NewNTPReferenceClockIP(localAddr, remoteAddr *net.UDPAddr, lclk timebase.LocalClock, dscp uint8,
 	authModes []string, ntskeServer string, ntskeInsecureSkipVerify bool, log *zap.Logger) *NtpReferenceClockIP {
 	c := &NtpReferenceClockIP{
 		localAddr:  localAddr,
 		remoteAddr: remoteAddr,
 	}
 	c.ntpc = &client.IPClient{
+		Lclk:            lclk,
 		DSCP:            dscp,
 		InterleavedMode: true,
 	}

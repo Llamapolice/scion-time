@@ -7,7 +7,7 @@ import (
 	"crypto/tls"
 	"encoding/hex"
 	"example.com/scion-time/core"
-	"example.com/scion-time/core/netbase"
+	"example.com/scion-time/core/netcore"
 	"example.com/scion-time/driver/networking"
 	"example.com/scion-time/simulation/simutils"
 	"flag"
@@ -39,7 +39,7 @@ import (
 	"example.com/scion-time/core/cryptobase"
 	"example.com/scion-time/core/server"
 	"example.com/scion-time/core/sync"
-	"example.com/scion-time/core/timebase"
+	"example.com/scion-time/core/timecore"
 
 	"example.com/scion-time/driver/clock"
 	"example.com/scion-time/net/ntp"
@@ -144,18 +144,18 @@ func runServer(configFile string) {
 	localAddr := core.LocalAddress(cfg)
 	daemonAddr := core.DaemonAddress(cfg)
 
-	localAddr.Host.Port = 0
-	refClocks, netClocks := core.CreateClocks(cfg, localAddr, log)
-	syncClks := sync.RegisterClocks(refClocks, netClocks)
-
 	lclk := &clock.SystemClock{Log: log}
-	timebase.RegisterClock(lclk)
+	timecore.RegisterClock(lclk)
+
+	localAddr.Host.Port = 0
+	refClocks, netClocks := core.CreateClocks(cfg, localAddr, lclk, log)
+	syncClks := sync.RegisterClocks(refClocks, netClocks)
 
 	lcrypt := &crypto.SafeCrypto{Log: log}
 	cryptobase.RegisterCrypto(lcrypt)
 
 	lnet := &networking.UDPConnector{Log: log}
-	netbase.RegisterNetProvider(lnet)
+	netcore.RegisterNetProvider(lnet)
 
 	if len(refClocks) != 0 {
 		sync.SyncToRefClocks(log, lclk, syncClks)
@@ -172,11 +172,11 @@ func runServer(configFile string) {
 
 	localAddr.Host.Port = ntp.ServerPortIP
 	server.StartNTSKEServerIP(ctx, log, copyIP(localAddr.Host.IP), localAddr.Host.Port, tlsConfig, provider)
-	server.StartIPServer(ctx, log, snet.CopyUDPAddr(localAddr.Host), dscp, provider)
+	server.StartIPServer(ctx, log, lclk, snet.CopyUDPAddr(localAddr.Host), dscp, provider)
 
 	localAddr.Host.Port = ntp.ServerPortSCION
 	server.StartNTSKEServerSCION(ctx, log, udp.UDPAddrFromSnet(localAddr), tlsConfig, provider)
-	server.StartSCIONServer(ctx, log, daemonAddr, snet.CopyUDPAddr(localAddr.Host), dscp, provider)
+	server.StartSCIONServer(ctx, log, lclk, daemonAddr, snet.CopyUDPAddr(localAddr.Host), dscp, provider)
 
 	runMonitor(log)
 }
@@ -189,18 +189,18 @@ func runRelay(configFile string) {
 	localAddr := core.LocalAddress(cfg)
 	daemonAddr := core.DaemonAddress(cfg)
 
-	localAddr.Host.Port = 0
-	refClocks, netClocks := core.CreateClocks(cfg, localAddr, log)
-	syncClks := sync.RegisterClocks(refClocks, netClocks)
-
 	lclk := &clock.SystemClock{Log: log}
-	timebase.RegisterClock(lclk)
+	timecore.RegisterClock(lclk)
+
+	localAddr.Host.Port = 0
+	refClocks, netClocks := core.CreateClocks(cfg, localAddr, lclk, log)
+	syncClks := sync.RegisterClocks(refClocks, netClocks)
 
 	lcrypt := &crypto.SafeCrypto{Log: log}
 	cryptobase.RegisterCrypto(lcrypt)
 
 	lnet := &networking.UDPConnector{Log: log}
-	netbase.RegisterNetProvider(lnet)
+	netcore.RegisterNetProvider(lnet)
 
 	if len(refClocks) != 0 {
 		sync.SyncToRefClocks(log, lclk, syncClks)
@@ -217,11 +217,11 @@ func runRelay(configFile string) {
 
 	localAddr.Host.Port = ntp.ServerPortIP
 	server.StartNTSKEServerIP(ctx, log, copyIP(localAddr.Host.IP), localAddr.Host.Port, tlsConfig, provider)
-	server.StartIPServer(ctx, log, snet.CopyUDPAddr(localAddr.Host), dscp, provider)
+	server.StartIPServer(ctx, log, lclk, snet.CopyUDPAddr(localAddr.Host), dscp, provider)
 
 	localAddr.Host.Port = ntp.ServerPortSCION
 	server.StartNTSKEServerSCION(ctx, log, udp.UDPAddrFromSnet(localAddr), tlsConfig, provider)
-	server.StartSCIONServer(ctx, log, daemonAddr, snet.CopyUDPAddr(localAddr.Host), dscp, provider)
+	server.StartSCIONServer(ctx, log, lclk, daemonAddr, snet.CopyUDPAddr(localAddr.Host), dscp, provider)
 
 	runMonitor(log)
 }
@@ -233,18 +233,18 @@ func runClient(configFile string) {
 	core.LoadConfig(&cfg, configFile, log)
 	localAddr := core.LocalAddress(cfg)
 
-	localAddr.Host.Port = 0
-	refClocks, netClocks := core.CreateClocks(cfg, localAddr, log)
-	syncClks := sync.RegisterClocks(refClocks, netClocks)
-
 	lclk := &clock.SystemClock{Log: log}
-	timebase.RegisterClock(lclk)
+	timecore.RegisterClock(lclk)
+
+	localAddr.Host.Port = 0
+	refClocks, netClocks := core.CreateClocks(cfg, localAddr, lclk, log)
+	syncClks := sync.RegisterClocks(refClocks, netClocks)
 
 	lcrypt := &crypto.SafeCrypto{Log: log}
 	cryptobase.RegisterCrypto(lcrypt)
 
 	lnet := &networking.UDPConnector{Log: log}
-	netbase.RegisterNetProvider(lnet)
+	netcore.RegisterNetProvider(lnet)
 
 	scionClocksAvailable := false
 	for _, c := range refClocks {
@@ -255,7 +255,7 @@ func runClient(configFile string) {
 		}
 	}
 	if scionClocksAvailable {
-		server.StartSCIONDispatcher(ctx, log, snet.CopyUDPAddr(localAddr.Host))
+		server.StartSCIONDispatcher(ctx, log, lclk, snet.CopyUDPAddr(localAddr.Host))
 	}
 
 	if len(refClocks) != 0 {
@@ -275,17 +275,18 @@ func runIPTool(localAddr, remoteAddr *snet.UDPAddr, dscp uint8,
 	ctx := context.Background()
 
 	lclk := &clock.SystemClock{Log: log}
-	timebase.RegisterClock(lclk)
+	timecore.RegisterClock(lclk)
 
 	lcrypt := &crypto.SafeCrypto{Log: log}
 	cryptobase.RegisterCrypto(lcrypt)
 
 	lnet := &networking.UDPConnector{Log: log}
-	netbase.RegisterNetProvider(lnet)
+	netcore.RegisterNetProvider(lnet)
 
 	laddr := localAddr.Host
 	raddr := remoteAddr.Host
 	c := &client.IPClient{
+		Lclk:            lclk,
 		DSCP:            dscp,
 		InterleavedMode: true,
 	}
@@ -312,19 +313,19 @@ func runSCIONTool(daemonAddr, dispatcherMode string, localAddr, remoteAddr *snet
 	ctx := context.Background()
 
 	lclk := &clock.SystemClock{Log: log}
-	timebase.RegisterClock(lclk)
+	timecore.RegisterClock(lclk)
 
 	lcrypt := &crypto.SafeCrypto{Log: log}
 	cryptobase.RegisterCrypto(lcrypt)
 
 	lnet := &networking.UDPConnector{Log: log}
-	netbase.RegisterNetProvider(lnet)
+	netcore.RegisterNetProvider(lnet)
 
 	if dispatcherMode == dispatcherModeInternal {
-		server.StartSCIONDispatcher(ctx, log, snet.CopyUDPAddr(localAddr.Host))
+		server.StartSCIONDispatcher(ctx, log, lclk, snet.CopyUDPAddr(localAddr.Host))
 	}
 
-	dc := netbase.NewDaemonConnector(ctx, daemonAddr)
+	dc := netcore.NewDaemonConnector(ctx, daemonAddr)
 
 	var ps []snet.Path
 	if remoteAddr.IA.Equal(localAddr.IA) {
@@ -347,6 +348,7 @@ func runSCIONTool(daemonAddr, dispatcherMode string, localAddr, remoteAddr *snet
 	laddr := udp.UDPAddrFromSnet(localAddr)
 	raddr := udp.UDPAddrFromSnet(remoteAddr)
 	c := &client.SCIONClient{
+		Lclk:            lclk,
 		DSCP:            dscp,
 		InterleavedMode: true,
 	}
@@ -390,39 +392,39 @@ func runBenchmark(configFile string) {
 
 func runIPBenchmark(localAddr, remoteAddr *snet.UDPAddr, authModes []string, ntskeServer string, log *zap.Logger) {
 	lclk := &clock.SystemClock{Log: zap.NewNop()}
-	timebase.RegisterClock(lclk)
+	timecore.RegisterClock(lclk)
 
 	lcrypt := &crypto.SafeCrypto{Log: zap.NewNop()}
 	cryptobase.RegisterCrypto(lcrypt)
 
 	lnet := &networking.UDPConnector{Log: zap.NewNop()}
-	netbase.RegisterNetProvider(lnet)
+	netcore.RegisterNetProvider(lnet)
 
-	benchmark.RunIPBenchmark(localAddr.Host, remoteAddr.Host, authModes, ntskeServer, log)
+	benchmark.RunIPBenchmark(localAddr.Host, remoteAddr.Host, lclk, authModes, ntskeServer, log)
 }
 
 func runSCIONBenchmark(daemonAddr string, localAddr, remoteAddr *snet.UDPAddr, authModes []string, ntskeServer string, log *zap.Logger) {
 	lclk := &clock.SystemClock{Log: zap.NewNop()}
-	timebase.RegisterClock(lclk)
+	timecore.RegisterClock(lclk)
 
 	lcrypt := &crypto.SafeCrypto{Log: zap.NewNop()}
 	cryptobase.RegisterCrypto(lcrypt)
 
 	lnet := &networking.UDPConnector{Log: zap.NewNop()}
-	netbase.RegisterNetProvider(lnet)
+	netcore.RegisterNetProvider(lnet)
 
-	benchmark.RunSCIONBenchmark(daemonAddr, localAddr, remoteAddr, authModes, ntskeServer, log)
+	benchmark.RunSCIONBenchmark(daemonAddr, localAddr, remoteAddr, lclk, authModes, ntskeServer, log)
 }
 
 func runSimulation(seed int64, configFile string) {
 	lclk := simutils.NewSimulationClock(seed, log)
-	timebase.RegisterClock(lclk)
+	timecore.RegisterClock(lclk)
 
 	lcrypt := simutils.NewSimCrypto(seed, log)
 	cryptobase.RegisterCrypto(lcrypt)
 
 	lnet := simutils.NewSimConnector(log)
-	netbase.RegisterNetProvider(lnet)
+	netcore.RegisterNetProvider(lnet)
 
 	simulation.RunSimulation(configFile, lclk, lcrypt, lnet, log)
 }

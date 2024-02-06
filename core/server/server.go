@@ -2,6 +2,7 @@ package server
 
 import (
 	"container/heap"
+	"example.com/scion-time/base/timebase"
 	"sync"
 	"time"
 
@@ -9,8 +10,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promauto"
 
 	"example.com/scion-time/base/metrics"
-
-	"example.com/scion-time/core/timebase"
 
 	"example.com/scion-time/net/ntp"
 )
@@ -100,7 +99,7 @@ func (q *tssQueue) Pop() any {
 	return tssi
 }
 
-func handleRequest(clientID string, req *ntp.Packet, rxt, txt *time.Time, resp *ntp.Packet) {
+func handleRequest(clientID string, lclk timebase.LocalClock, req *ntp.Packet, rxt, txt *time.Time, resp *ntp.Packet) {
 	resp.SetVersion(ntp.VersionMax)
 	resp.SetMode(ntp.ModeServer)
 	resp.Stratum = 1
@@ -109,7 +108,7 @@ func handleRequest(clientID string, req *ntp.Packet, rxt, txt *time.Time, resp *
 	resp.RootDispersion = ntp.Time32{Seconds: 0, Fraction: 10}
 	resp.ReferenceID = serverRefID
 
-	*txt = timebase.Now()
+	*txt = lclk.Now()
 
 	rxt64 := ntp.Time64FromTime(*rxt)
 	txt64 := ntp.Time64FromTime(*txt)

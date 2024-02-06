@@ -7,7 +7,7 @@ import (
 	"example.com/scion-time/base/cryptobase"
 )
 
-// TODO: structure copied from timebase
+// TODO: structure copied from timecore
 
 var lcrypt atomic.Value
 

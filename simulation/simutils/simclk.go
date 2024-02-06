@@ -36,7 +36,7 @@ func (c SimClock) Now() time.Time {
 	c.counter++
 	var ns int64 = c.time.UnixNano()
 	c.time = c.time.Add(time.Duration(1e9))
-	c.log.Debug("Time is now", zap.Int64("ns", ns))
+	c.log.Debug("Time is now", zap.Int64("ns", ns), zap.String("clock id", c.Id))
 	return time.Unix(0, ns)
 }
 
@@ -76,5 +76,5 @@ type SimReferenceClock struct {
 }
 
 func (s *SimReferenceClock) MeasureClockOffset(ctx context.Context, log *zap.Logger) (time.Duration, error) {
-	return 0, nil
+	return time.Second, nil
 }

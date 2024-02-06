@@ -71,6 +71,9 @@ func (S *SimConnection) ReadMsgUDPAddrPort(buf []byte, oob []byte) (
 
 	msg := <-S.ReadFrom
 	S.Log.Debug("Received message", zap.String("connection id", S.Id))
+	if S.Closed {
+		S.Log.Error("Message received on closed connection")
+	}
 	data := msg.B
 	if len(data) > cap(buf) {
 		S.Log.Error("Buffer passed to ReadMsgUDPAddrPort is too small",
@@ -100,7 +103,7 @@ func (S *SimConnection) WriteToUDPAddrPort(b []byte, addr netip.AddrPort) (int, 
 	}
 	for S.WriteTo == nil {
 		// Wait for main simulator routine to initialize channel
-		time.Sleep(0)
+		time.Sleep(time.Microsecond)
 	}
 	S.WriteTo <- SimPacket{B: b, TargetAddr: addr, SourceAddr: S.LAddr.AddrPort()}
 	return len(b), nil

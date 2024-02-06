@@ -1,4 +1,4 @@
-package timebase
+package timecore
 
 import (
 	"sync/atomic"

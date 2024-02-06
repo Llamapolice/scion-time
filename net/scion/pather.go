@@ -2,7 +2,7 @@ package scion
 
 import (
 	"context"
-	"example.com/scion-time/core/netbase"
+	"example.com/scion-time/core/netcore"
 	"sync"
 	"time"
 
@@ -66,7 +66,7 @@ func update(ctx context.Context, p *Pather, dc daemon.Connector, dstIAs []addr.I
 func StartPather(ctx context.Context, log *zap.Logger, daemonAddr string, dstIAs []addr.IA) *Pather {
 	p := &Pather{log: log}
 	// Hooked in here to be able to catch simulations and serve a modified connector
-	dc := netbase.NewDaemonConnector(ctx, daemonAddr)
+	dc := netcore.NewDaemonConnector(ctx, daemonAddr)
 	update(ctx, p, dc, dstIAs)
 	// TODO is this an issue if it continually runs?
 	go func(ctx context.Context, p *Pather, dc daemon.Connector, dstIAs []addr.IA) {

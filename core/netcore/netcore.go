@@ -1,4 +1,4 @@
-package netbase
+package netcore
 
 import (
 	"context"
@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-// TODO: structure copied from timebase
+// TODO: structure copied from timecore
 
 var lnetprovider atomic.Value
 

@@ -4,7 +4,8 @@ import (
 	"context"
 	"crypto/subtle"
 	"example.com/scion-time/base/netprovider"
-	"example.com/scion-time/core/netbase"
+	"example.com/scion-time/base/timebase"
+	"example.com/scion-time/core/netcore"
 	"net"
 	"net/netip"
 	"strconv"
@@ -23,8 +24,6 @@ import (
 	"go.uber.org/zap"
 
 	"example.com/scion-time/base/metrics"
-
-	"example.com/scion-time/core/timebase"
 
 	"example.com/scion-time/net/ntp"
 	"example.com/scion-time/net/nts"
@@ -70,15 +69,15 @@ func newSCIONServerMetrics(id string) *scionServerMetrics { // Had to add some w
 	}
 }
 
-func runSCIONServer(ctx context.Context, log *zap.Logger, mtrcs *scionServerMetrics,
+func runSCIONServer(ctx context.Context, log *zap.Logger, mtrcs *scionServerMetrics, lclk timebase.LocalClock,
 	conn netprovider.Connection, localHostIface string, localHostPort int, dscp uint8,
 	fetcher *scion.Fetcher, provider *ntske.Provider) {
 	defer conn.Close()
-	err := netbase.EnableTimestamping(conn, localHostIface)
+	err := netcore.EnableTimestamping(conn, localHostIface)
 	if err != nil {
 		log.Error("failed to enable timestamping", zap.Error(err))
 	}
-	err = netbase.SetDSCP(conn, dscp)
+	err = netcore.SetDSCP(conn, dscp)
 	if err != nil {
 		log.Info("failed to set DSCP", zap.Error(err))
 	}
@@ -134,7 +133,7 @@ func runSCIONServer(ctx context.Context, log *zap.Logger, mtrcs *scionServerMetr
 		rxt, err := udp.TimestampFromOOBData(oob)
 		if err != nil {
 			oob = oob[:0]
-			rxt = timebase.Now()
+			rxt = lclk.Now()
 			// TODO put this back
 			//log.Error("failed to read packet rx timestamp from oob, falling back to local clock", zap.Error(err))
 		}
@@ -218,7 +217,7 @@ func runSCIONServer(ctx context.Context, log *zap.Logger, mtrcs *scionServerMetr
 				log.Error("failed to write packet", zap.Error(err))
 				continue
 			}
-			_, id, err := netbase.ReadTXTimestamp(conn)
+			_, id, err := netcore.ReadTXTimestamp(conn)
 			if err != nil {
 				//log.Error("failed to read packet tx timestamp", zap.Error(err)) // TODO this was cluttering logs
 			} else if id != txID {
@@ -358,7 +357,7 @@ func runSCIONServer(ctx context.Context, log *zap.Logger, mtrcs *scionServerMetr
 
 			var txt0 time.Time
 			var ntpresp ntp.Packet
-			handleRequest(clientID, &ntpreq, &rxt, &txt0, &ntpresp)
+			handleRequest(clientID, lclk, &ntpreq, &rxt, &txt0, &ntpresp)
 
 			scionLayer.TrafficClass = dscp << 2
 			scionLayer.DstIA, scionLayer.SrcIA = scionLayer.SrcIA, scionLayer.DstIA
@@ -456,7 +455,7 @@ func runSCIONServer(ctx context.Context, log *zap.Logger, mtrcs *scionServerMetr
 				log.Error("failed to write packet", zap.Error(err))
 				continue
 			}
-			txt1, id, err := netbase.ReadTXTimestamp(conn)
+			txt1, id, err := netcore.ReadTXTimestamp(conn)
 			if err != nil {
 				txt1 = txt0
 				//log.Error("failed to read packet tx timestamp", zap.Error(err)) // TODO put this back
@@ -474,7 +473,7 @@ func runSCIONServer(ctx context.Context, log *zap.Logger, mtrcs *scionServerMetr
 	}
 }
 
-func StartSCIONServer(ctx context.Context, log *zap.Logger,
+func StartSCIONServer(ctx context.Context, log *zap.Logger, lclk timebase.LocalClock,
 	daemonAddr string, localHost *net.UDPAddr, dscp uint8, provider *ntske.Provider) {
 	log.Info("server listening via SCION",
 		zap.Stringer("ip", localHost.IP),
@@ -499,27 +498,26 @@ func StartSCIONServer(ctx context.Context, log *zap.Logger,
 	mtrcs := newSCIONServerMetrics("_" + id)
 
 	if scionServerNumGoroutine == 1 {
-		fetcher := scion.NewFetcher(netbase.NewDaemonConnector(ctx, daemonAddr))
-		conn, err := netbase.ListenUDP("udp", localHost)
+		fetcher := scion.NewFetcher(netcore.NewDaemonConnector(ctx, daemonAddr))
+		conn, err := netcore.ListenUDP("udp", localHost)
 		if err != nil {
 			log.Fatal("failed to listen for packets", zap.Error(err))
 		}
-		go runSCIONServer(ctx, log, mtrcs, conn, localHost.Zone, localHostPort, dscp, fetcher, provider)
+		go runSCIONServer(ctx, log, mtrcs, lclk, conn, localHost.Zone, localHostPort, dscp, fetcher, provider)
 	} else {
 		for i := scionServerNumGoroutine; i > 0; i-- {
-			fetcher := scion.NewFetcher(netbase.NewDaemonConnector(ctx, daemonAddr))
-			conn, err := netbase.ListenPacket("udp",
+			fetcher := scion.NewFetcher(netcore.NewDaemonConnector(ctx, daemonAddr))
+			conn, err := netcore.ListenPacket("udp",
 				net.JoinHostPort(localHost.IP.String(), strconv.Itoa(localHost.Port)))
 			if err != nil {
 				log.Fatal("failed to listen for packets", zap.Error(err))
 			}
-			go runSCIONServer(ctx, log, mtrcs, conn.(netprovider.Connection), localHost.Zone, localHostPort, dscp, fetcher, provider)
+			go runSCIONServer(ctx, log, mtrcs, lclk, conn.(netprovider.Connection), localHost.Zone, localHostPort, dscp, fetcher, provider)
 		}
 	}
 }
 
-func StartSCIONDispatcher(ctx context.Context, log *zap.Logger,
-	localHost *net.UDPAddr) {
+func StartSCIONDispatcher(ctx context.Context, log *zap.Logger, lclk timebase.LocalClock, localHost *net.UDPAddr) {
 	log.Info("dispatcher listening via SCION",
 		zap.Stringer("ip", localHost.IP),
 		zap.Int("port", scion.EndhostPort),
@@ -540,10 +538,10 @@ func StartSCIONDispatcher(ctx context.Context, log *zap.Logger,
 	log.Debug("creating new metrics from dispatcher", zap.String("id", id))
 	mtrcs := newSCIONServerMetrics("_dispatcher_" + id)
 
-	conn, err := netbase.ListenUDP("udp", localHost)
+	conn, err := netcore.ListenUDP("udp", localHost)
 	if err != nil {
 		log.Fatal("failed to listen for packets", zap.Error(err))
 	}
-	go runSCIONServer(ctx, log, mtrcs, conn, localHost.Zone, localHost.Port,
+	go runSCIONServer(ctx, log, mtrcs, lclk, conn, localHost.Zone, localHost.Port,
 		0 /* DSCP */, nil /* DRKey fetcher */, nil /* NTSKE provider */)
 }

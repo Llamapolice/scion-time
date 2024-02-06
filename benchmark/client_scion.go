@@ -3,6 +3,7 @@ package benchmark
 import (
 	"context"
 	"crypto/tls"
+	"example.com/scion-time/base/timebase"
 	"net"
 	"os"
 	"sync"
@@ -20,7 +21,14 @@ import (
 	"example.com/scion-time/net/udp"
 )
 
-func RunSCIONBenchmark(daemonAddr string, localAddr, remoteAddr *snet.UDPAddr, authModes []string, ntskeServer string, log *zap.Logger) {
+func RunSCIONBenchmark(
+	daemonAddr string,
+	localAddr, remoteAddr *snet.UDPAddr,
+	lclk timebase.LocalClock,
+	authModes []string,
+	ntskeServer string,
+	log *zap.Logger,
+) {
 	// const numClientGoroutine = 8
 	// const numRequestPerClient = 10000
 	const numClientGoroutine = 1
@@ -59,6 +67,7 @@ func RunSCIONBenchmark(daemonAddr string, localAddr, remoteAddr *snet.UDPAddr, a
 			laddr := udp.UDPAddrFromSnet(localAddr)
 			raddr := udp.UDPAddrFromSnet(remoteAddr)
 			c := &client.SCIONClient{
+				Lclk:            lclk,
 				InterleavedMode: true,
 				Histo:           hg,
 			}

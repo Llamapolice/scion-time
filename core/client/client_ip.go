@@ -2,7 +2,8 @@ package client
 
 import (
 	"context"
-	"example.com/scion-time/core/netbase"
+	"example.com/scion-time/base/timebase"
+	"example.com/scion-time/core/netcore"
 	"net"
 	"net/netip"
 	"time"
@@ -15,8 +16,6 @@ import (
 
 	"example.com/scion-time/base/metrics"
 
-	"example.com/scion-time/core/timebase"
-
 	"example.com/scion-time/net/ntp"
 	"example.com/scion-time/net/nts"
 	"example.com/scion-time/net/ntske"
@@ -24,6 +23,7 @@ import (
 )
 
 type IPClient struct {
+	Lclk            timebase.LocalClock
 	DSCP            uint8
 	InterleavedMode bool
 	Auth            struct {
@@ -94,7 +94,7 @@ func (c *IPClient) ResetInterleavedMode() {
 func (c *IPClient) measureClockOffsetIP(ctx context.Context, log *zap.Logger, mtrcs *ipClientMetrics,
 	localAddr, remoteAddr *net.UDPAddr) (
 	at time.Time, offset time.Duration, weight float64, err error) {
-	conn, err := netbase.ListenUDP("udp", &net.UDPAddr{IP: localAddr.IP})
+	conn, err := netcore.ListenUDP("udp", &net.UDPAddr{IP: localAddr.IP})
 	if err != nil {
 		return at, offset, weight, err
 	}
@@ -106,11 +106,11 @@ func (c *IPClient) measureClockOffsetIP(ctx context.Context, log *zap.Logger, mt
 			return at, offset, weight, err
 		}
 	}
-	err = netbase.EnableTimestamping(conn, localAddr.Zone)
+	err = netcore.EnableTimestamping(conn, localAddr.Zone)
 	if err != nil {
 		log.Error("failed to enable timestamping", zap.Error(err))
 	}
-	err = netbase.SetDSCP(conn, c.DSCP)
+	err = netcore.SetDSCP(conn, c.DSCP)
 	if err != nil {
 		log.Info("failed to set DSCP", zap.Error(err))
 	}
@@ -133,14 +133,14 @@ func (c *IPClient) measureClockOffsetIP(ctx context.Context, log *zap.Logger, mt
 	buf := make([]byte, ntp.PacketLen)
 
 	reference := remoteAddr.String()
-	cTxTime0 := timebase.Now()
+	cTxTime0 := c.Lclk.Now()
 	interleavedReq := false
 
 	ntpreq := ntp.Packet{}
 	ntpreq.SetVersion(ntp.VersionMax)
 	ntpreq.SetMode(ntp.ModeClient)
 	if c.InterleavedMode && reference == c.prev.reference &&
-		cTxTime0.Sub(ntp.TimeFromTime64(c.prev.cTxTime)) <= 2 * time.Second {
+		cTxTime0.Sub(ntp.TimeFromTime64(c.prev.cTxTime)) <= 2*time.Second {
 		interleavedReq = true
 		ntpreq.OriginTime = c.prev.sRxTime
 		ntpreq.ReceiveTime = c.prev.cRxTime
@@ -164,9 +164,9 @@ func (c *IPClient) measureClockOffsetIP(ctx context.Context, log *zap.Logger, mt
 	if n != len(buf) {
 		return at, offset, weight, errWrite
 	}
-	cTxTime1, id, err := netbase.ReadTXTimestamp(conn)
+	cTxTime1, id, err := netcore.ReadTXTimestamp(conn)
 	if err != nil || id != 0 {
-		cTxTime1 = timebase.Now()
+		cTxTime1 = c.Lclk.Now()
 		log.Error("failed to read packet tx timestamp", zap.Error(err))
 	}
 	mtrcs.reqsSent.Inc()
@@ -181,7 +181,7 @@ func (c *IPClient) measureClockOffsetIP(ctx context.Context, log *zap.Logger, mt
 		oob = oob[:cap(oob)]
 		n, oobn, flags, srcAddr, err := conn.ReadMsgUDPAddrPort(buf, oob)
 		if err != nil {
-			if numRetries != maxNumRetries && deadlineIsSet && timebase.Now().Before(deadline) {
+			if numRetries != maxNumRetries && deadlineIsSet && c.Lclk.Now().Before(deadline) {
 				log.Info("failed to read packet", zap.Error(err))
 				numRetries++
 				continue
@@ -190,7 +190,7 @@ func (c *IPClient) measureClockOffsetIP(ctx context.Context, log *zap.Logger, mt
 		}
 		if flags != 0 {
 			err = errUnexpectedPacketFlags
-			if numRetries != maxNumRetries && deadlineIsSet && timebase.Now().Before(deadline) {
+			if numRetries != maxNumRetries && deadlineIsSet && c.Lclk.Now().Before(deadline) {
 				log.Info("failed to read packet", zap.Int("flags", flags))
 				numRetries++
 				continue
@@ -200,7 +200,7 @@ func (c *IPClient) measureClockOffsetIP(ctx context.Context, log *zap.Logger, mt
 		oob = oob[:oobn]
 		cRxTime, err := udp.TimestampFromOOBData(oob)
 		if err != nil {
-			cRxTime = timebase.Now()
+			cRxTime = c.Lclk.Now()
 			log.Error("failed to read packet rx timestamp", zap.Error(err))
 		}
 		buf = buf[:n]
@@ -208,7 +208,7 @@ func (c *IPClient) measureClockOffsetIP(ctx context.Context, log *zap.Logger, mt
 
 		if compareAddrs(srcAddr.Addr(), remoteAddr.AddrPort().Addr()) != 0 {
 			err = errUnexpectedPacketSource
-			if numRetries != maxNumRetries && deadlineIsSet && timebase.Now().Before(deadline) {
+			if numRetries != maxNumRetries && deadlineIsSet && c.Lclk.Now().Before(deadline) {
 				log.Info("received packet from unexpected source")
 				numRetries++
 				continue
@@ -219,7 +219,7 @@ func (c *IPClient) measureClockOffsetIP(ctx context.Context, log *zap.Logger, mt
 		var ntpresp ntp.Packet
 		err = ntp.DecodePacket(&ntpresp, buf)
 		if err != nil {
-			if numRetries != maxNumRetries && deadlineIsSet && timebase.Now().Before(deadline) {
+			if numRetries != maxNumRetries && deadlineIsSet && c.Lclk.Now().Before(deadline) {
 				log.Info("failed to decode packet payload", zap.Error(err))
 				numRetries++
 				continue
@@ -232,7 +232,7 @@ func (c *IPClient) measureClockOffsetIP(ctx context.Context, log *zap.Logger, mt
 		if c.Auth.Enabled {
 			err = nts.DecodePacket(&ntsresp, buf)
 			if err != nil {
-				if numRetries != maxNumRetries && deadlineIsSet && timebase.Now().Before(deadline) {
+				if numRetries != maxNumRetries && deadlineIsSet && c.Lclk.Now().Before(deadline) {
 					log.Info("failed to decode NTS packet", zap.Error(err))
 					numRetries++
 					continue
@@ -242,7 +242,7 @@ func (c *IPClient) measureClockOffsetIP(ctx context.Context, log *zap.Logger, mt
 
 			err = nts.ProcessResponse(buf, ntskeData.S2cKey, &c.Auth.NTSKEFetcher, &ntsresp, requestID)
 			if err != nil {
-				if numRetries != maxNumRetries && deadlineIsSet && timebase.Now().Before(deadline) {
+				if numRetries != maxNumRetries && deadlineIsSet && c.Lclk.Now().Before(deadline) {
 					log.Info("failed to process NTS packet", zap.Error(err))
 					numRetries++
 					continue
@@ -259,7 +259,7 @@ func (c *IPClient) measureClockOffsetIP(ctx context.Context, log *zap.Logger, mt
 			interleavedResp = true
 		} else if ntpresp.OriginTime != ntpreq.TransmitTime {
 			err = errUnexpectedPacket
-			if numRetries != maxNumRetries && deadlineIsSet && timebase.Now().Before(deadline) {
+			if numRetries != maxNumRetries && deadlineIsSet && c.Lclk.Now().Before(deadline) {
 				log.Info("received packet with unexpected type or structure")
 				numRetries++
 				continue
@@ -327,7 +327,7 @@ func (c *IPClient) measureClockOffsetIP(ctx context.Context, log *zap.Logger, mt
 		if c.Raw {
 			offset, weight = off, 1000.0
 		} else {
-			offset, weight = filter(log, reference, t0, t1, t2, t3)
+			offset, weight = filter(log, reference, c.Lclk, t0, t1, t2, t3)
 		}
 
 		if c.Histo != nil {

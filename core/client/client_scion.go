@@ -3,7 +3,8 @@ package client
 import (
 	"context"
 	"crypto/subtle"
-	"example.com/scion-time/core/netbase"
+	"example.com/scion-time/base/timebase"
+	"example.com/scion-time/core/netcore"
 	"net"
 	"net/netip"
 	"time"
@@ -23,8 +24,6 @@ import (
 
 	"example.com/scion-time/base/metrics"
 
-	"example.com/scion-time/core/timebase"
-
 	"example.com/scion-time/net/ntp"
 	"example.com/scion-time/net/nts"
 	"example.com/scion-time/net/ntske"
@@ -33,6 +32,7 @@ import (
 )
 
 type SCIONClient struct {
+	Lclk            timebase.LocalClock
 	DSCP            uint8
 	InterleavedMode bool
 	Auth            struct {
@@ -121,7 +121,7 @@ func (c *SCIONClient) measureClockOffsetSCION(ctx context.Context, log *zap.Logg
 	}
 	var authKey []byte
 
-	conn, err := netbase.ListenUDP("udp", &net.UDPAddr{IP: localAddr.Host.IP})
+	conn, err := netcore.ListenUDP("udp", &net.UDPAddr{IP: localAddr.Host.IP})
 	if err != nil {
 		return at, offset, weight, err
 	}
@@ -133,11 +133,11 @@ func (c *SCIONClient) measureClockOffsetSCION(ctx context.Context, log *zap.Logg
 			return at, offset, weight, err
 		}
 	}
-	err = netbase.EnableTimestamping(conn, localAddr.Host.Zone)
+	err = netcore.EnableTimestamping(conn, localAddr.Host.Zone)
 	if err != nil {
 		log.Error("failed to enable timestamping", zap.Error(err))
 	}
-	err = netbase.SetDSCP(conn, c.DSCP)
+	err = netcore.SetDSCP(conn, c.DSCP)
 	if err != nil {
 		log.Info("failed to set DSCP", zap.Error(err))
 	}
@@ -175,7 +175,7 @@ func (c *SCIONClient) measureClockOffsetSCION(ctx context.Context, log *zap.Logg
 	buf := make([]byte, scion.MTU)
 
 	reference := remoteAddr.IA.String() + "," + remoteAddr.Host.String()
-	cTxTime0 := timebase.Now()
+	cTxTime0 := c.Lclk.Now()
 	interleavedReq := false
 
 	ntpreq := ntp.Packet{}
@@ -307,9 +307,9 @@ func (c *SCIONClient) measureClockOffsetSCION(ctx context.Context, log *zap.Logg
 	if n != len(buffer.Bytes()) {
 		return at, offset, weight, errWrite
 	}
-	cTxTime1, id, err := netbase.ReadTXTimestamp(conn)
+	cTxTime1, id, err := netcore.ReadTXTimestamp(conn)
 	if err != nil || id != 0 {
-		cTxTime1 = timebase.Now()
+		cTxTime1 = c.Lclk.Now()
 		// TODO put this back
 		//log.Error("failed to read packet tx timestamp, falling back to local clock", zap.Error(err))
 	}
@@ -325,7 +325,7 @@ func (c *SCIONClient) measureClockOffsetSCION(ctx context.Context, log *zap.Logg
 		oob = oob[:cap(oob)]
 		n, oobn, flags, lastHop, err := conn.ReadMsgUDPAddrPort(buf, oob)
 		if err != nil {
-			if numRetries != maxNumRetries && deadlineIsSet && timebase.Now().Before(deadline) {
+			if numRetries != maxNumRetries && deadlineIsSet && c.Lclk.Now().Before(deadline) {
 				log.Info("failed to read packet", zap.Error(err))
 				numRetries++
 				continue
@@ -334,7 +334,7 @@ func (c *SCIONClient) measureClockOffsetSCION(ctx context.Context, log *zap.Logg
 		}
 		if flags != 0 {
 			err = errUnexpectedPacketFlags
-			if numRetries != maxNumRetries && deadlineIsSet && timebase.Now().Before(deadline) {
+			if numRetries != maxNumRetries && deadlineIsSet && c.Lclk.Now().Before(deadline) {
 				log.Info("failed to read packet", zap.Int("flags", flags))
 				numRetries++
 				continue
@@ -344,7 +344,7 @@ func (c *SCIONClient) measureClockOffsetSCION(ctx context.Context, log *zap.Logg
 		oob = oob[:oobn]
 		cRxTime, err := udp.TimestampFromOOBData(oob)
 		if err != nil {
-			cRxTime = timebase.Now()
+			cRxTime = c.Lclk.Now()
 			// TODO put this back
 			//log.Error("failed to read packet rx timestamp from oob, falling back to local clock", zap.Error(err))
 		}
@@ -363,7 +363,7 @@ func (c *SCIONClient) measureClockOffsetSCION(ctx context.Context, log *zap.Logg
 		decoded := make([]gopacket.LayerType, 4)
 		err = parser.DecodeLayers(buf, &decoded)
 		if err != nil {
-			if numRetries != maxNumRetries && deadlineIsSet && timebase.Now().Before(deadline) {
+			if numRetries != maxNumRetries && deadlineIsSet && c.Lclk.Now().Before(deadline) {
 				log.Info("failed to decode packet", zap.Error(err))
 				numRetries++
 				continue
@@ -374,7 +374,7 @@ func (c *SCIONClient) measureClockOffsetSCION(ctx context.Context, log *zap.Logg
 			decoded[len(decoded)-1] == slayers.LayerTypeSCIONUDP
 		if !validType {
 			err = errUnexpectedPacket
-			if numRetries != maxNumRetries && deadlineIsSet && timebase.Now().Before(deadline) {
+			if numRetries != maxNumRetries && deadlineIsSet && c.Lclk.Now().Before(deadline) {
 				log.Info("failed to decode packet", zap.String("cause", "unexpected type or structure"))
 				numRetries++
 				continue
@@ -387,7 +387,7 @@ func (c *SCIONClient) measureClockOffsetSCION(ctx context.Context, log *zap.Logg
 			compareIPs(scionLayer.RawDstAddr, localAddr.Host.IP) == 0
 		if !validSrc || !validDst {
 			err = errUnexpectedPacket
-			if numRetries != maxNumRetries && deadlineIsSet && timebase.Now().Before(deadline) {
+			if numRetries != maxNumRetries && deadlineIsSet && c.Lclk.Now().Before(deadline) {
 				if !validSrc {
 					log.Info("received packet from unexpected source")
 				}
@@ -432,7 +432,7 @@ func (c *SCIONClient) measureClockOffsetSCION(ctx context.Context, log *zap.Logg
 						authenticated = subtle.ConstantTimeCompare(scion.PacketAuthOptMAC(authOpt), c.Auth.mac) != 0
 						if !authenticated {
 							err = errInvalidPacketAuthenticator
-							if numRetries != maxNumRetries && deadlineIsSet && timebase.Now().Before(deadline) {
+							if numRetries != maxNumRetries && deadlineIsSet && c.Lclk.Now().Before(deadline) {
 								log.Info("failed to authenticate packet", zap.Error(err))
 								numRetries++
 								continue
@@ -448,7 +448,7 @@ func (c *SCIONClient) measureClockOffsetSCION(ctx context.Context, log *zap.Logg
 		var ntpresp ntp.Packet
 		err = ntp.DecodePacket(&ntpresp, udpLayer.Payload)
 		if err != nil {
-			if numRetries != maxNumRetries && deadlineIsSet && timebase.Now().Before(deadline) {
+			if numRetries != maxNumRetries && deadlineIsSet && c.Lclk.Now().Before(deadline) {
 				log.Info("failed to decode packet payload", zap.Error(err))
 				numRetries++
 				continue
@@ -461,7 +461,7 @@ func (c *SCIONClient) measureClockOffsetSCION(ctx context.Context, log *zap.Logg
 		if c.Auth.NTSEnabled {
 			err = nts.DecodePacket(&ntsresp, udpLayer.Payload)
 			if err != nil {
-				if numRetries != maxNumRetries && deadlineIsSet && timebase.Now().Before(deadline) {
+				if numRetries != maxNumRetries && deadlineIsSet && c.Lclk.Now().Before(deadline) {
 					log.Info("failed to decode NTS packet", zap.Error(err))
 					numRetries++
 					continue
@@ -471,7 +471,7 @@ func (c *SCIONClient) measureClockOffsetSCION(ctx context.Context, log *zap.Logg
 
 			err = nts.ProcessResponse(udpLayer.Payload, ntskeData.S2cKey, &c.Auth.NTSKEFetcher, &ntsresp, requestID)
 			if err != nil {
-				if numRetries != maxNumRetries && deadlineIsSet && timebase.Now().Before(deadline) {
+				if numRetries != maxNumRetries && deadlineIsSet && c.Lclk.Now().Before(deadline) {
 					log.Info("failed to process NTS packet", zap.Error(err))
 					numRetries++
 					continue
@@ -486,7 +486,7 @@ func (c *SCIONClient) measureClockOffsetSCION(ctx context.Context, log *zap.Logg
 			interleavedResp = true
 		} else if ntpresp.OriginTime != ntpreq.TransmitTime {
 			err = errUnexpectedPacket
-			if numRetries != maxNumRetries && deadlineIsSet && timebase.Now().Before(deadline) {
+			if numRetries != maxNumRetries && deadlineIsSet && c.Lclk.Now().Before(deadline) {
 				log.Info("received packet with unexpected type or structure")
 				numRetries++
 				continue
@@ -559,7 +559,7 @@ func (c *SCIONClient) measureClockOffsetSCION(ctx context.Context, log *zap.Logg
 		if c.Raw {
 			offset, weight = off, 1000.0
 		} else {
-			offset, weight = filter(log, reference, t0, t1, t2, t3)
+			offset, weight = filter(log, reference, c.Lclk, t0, t1, t2, t3)
 		}
 
 		if c.Histo != nil {

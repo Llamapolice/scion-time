@@ -5,14 +5,14 @@ import (
 	"crypto/tls"
 	"example.com/scion-time/base/crypto"
 	"example.com/scion-time/core/cryptobase"
-	"example.com/scion-time/core/netbase"
+	"example.com/scion-time/core/netcore"
 	"example.com/scion-time/driver/networking"
 	"net"
 	"os"
 	"testing"
 
 	"example.com/scion-time/core/client"
-	"example.com/scion-time/core/timebase"
+	"example.com/scion-time/core/timecore"
 	"example.com/scion-time/driver/clock"
 	"github.com/scionproto/scion/pkg/snet"
 )
@@ -43,17 +43,18 @@ func TestTimeserviceNTSChrony(t *testing.T) {
 	ctx := context.Background()
 
 	lclk := &clock.SystemClock{Log: log}
-	timebase.RegisterClock(lclk)
+	timecore.RegisterClock(lclk)
 
 	lcrypt := &crypto.SafeCrypto{}
 	cryptobase.RegisterCrypto(lcrypt)
 
 	lnet := &networking.UDPConnector{}
-	netbase.RegisterNetProvider(lnet)
+	netcore.RegisterNetProvider(lnet)
 
 	laddr := localAddrSnet.Host
 	raddr := remoteAddrSnet.Host
 	c := &client.IPClient{
+		Lclk:            lclk,
 		InterleavedMode: true,
 	}
 

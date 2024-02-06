@@ -7,33 +7,27 @@ import (
 	"go.uber.org/zap"
 
 	"example.com/scion-time/core/server"
-	"example.com/scion-time/core/timebase"
-
 	"example.com/scion-time/driver/clock"
 
 	"example.com/scion-time/net/ntp"
 )
 
-func init() {
-	lclk := &clock.SystemClock{Log: zap.NewNop()}
-	timebase.RegisterClock(lclk)
-}
-
 func TestSimpleRequest(t *testing.T) {
 	server.LogTSS(t, "pre")
+	lclk := &clock.SystemClock{Log: zap.NewNop()}
 
-	cTxTime := timebase.Now()
+	cTxTime := lclk.Now()
 	ntpreq := ntp.Packet{}
 	ntpreq.SetVersion(ntp.VersionMax)
 	ntpreq.SetMode(ntp.ModeClient)
 	ntpreq.TransmitTime = ntp.Time64FromTime(cTxTime)
 
-	rxt := timebase.Now()
+	rxt := lclk.Now()
 	clientID := "client-0"
 
 	var txt0 time.Time
 	var ntpresp ntp.Packet
-	server.HandleRequest(clientID, &ntpreq, &rxt, &txt0, &ntpresp)
+	server.HandleRequest(clientID, lclk, &ntpreq, &rxt, &txt0, &ntpresp)
 
 	server.LogTSS(t, "post")
 }

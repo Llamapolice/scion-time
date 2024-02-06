@@ -1,6 +1,7 @@
 package client
 
 import (
+	"example.com/scion-time/base/timebase"
 	"math"
 	"sync"
 	"time"
@@ -8,7 +9,6 @@ import (
 	"go.uber.org/zap"
 
 	"example.com/scion-time/base/timemath"
-	"example.com/scion-time/core/timebase"
 )
 
 const (
@@ -36,7 +36,7 @@ func combine(lo, mid, hi time.Duration, trust float64) (offset time.Duration, we
 	return
 }
 
-func filter(log *zap.Logger, reference string, cTxTime, sRxTime, sTxTime, cRxTime time.Time) (
+func filter(log *zap.Logger, reference string, lclk timebase.LocalClock, cTxTime, sRxTime, sTxTime, cRxTime time.Time) (
 	offset time.Duration, weight float64) {
 
 	// Based on Ntimed by Poul-Henning Kamp, https://github.com/bsdphk/Ntimed
@@ -48,8 +48,8 @@ func filter(log *zap.Logger, reference string, cTxTime, sRxTime, sTxTime, cRxTim
 	hi := timemath.Seconds(cRxTime.Sub(sTxTime))
 	mid := (lo + hi) / 2
 
-	if f.epoch != timebase.Epoch() {
-		f.epoch = timebase.Epoch()
+	if f.epoch != lclk.Epoch() {
+		f.epoch = lclk.Epoch()
 		f.alo = 0.0
 		f.amid = 0.0
 		f.ahi = 0.0
