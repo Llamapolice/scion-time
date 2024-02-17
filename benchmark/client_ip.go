@@ -3,6 +3,7 @@ package benchmark
 import (
 	"context"
 	"crypto/tls"
+	"example.com/scion-time/base/netprovider"
 	"example.com/scion-time/base/timebase"
 	"net"
 	"os"
@@ -15,7 +16,7 @@ import (
 	"example.com/scion-time/core/client"
 )
 
-func RunIPBenchmark(localAddr, remoteAddr *net.UDPAddr, lclk timebase.LocalClock, authModes []string, ntskeServer string, log *zap.Logger) {
+func RunIPBenchmark(localAddr, remoteAddr *net.UDPAddr, lclk timebase.LocalClock, connprov netprovider.ConnProvider, authModes []string, ntskeServer string, log *zap.Logger) {
 	// const numClientGoroutine = 8
 	// const numRequestPerClient = 10000
 	const numClientGoroutine = 1
@@ -32,9 +33,10 @@ func RunIPBenchmark(localAddr, remoteAddr *net.UDPAddr, lclk timebase.LocalClock
 			ctx := context.Background()
 
 			c := &client.IPClient{
-				Lclk:            lclk,
-				InterleavedMode: true,
-				Histo:           hg,
+				Lclk:               lclk,
+				ConnectionProvider: connprov,
+				InterleavedMode:    true,
+				Histo:              hg,
 			}
 
 			if contains(authModes, "nts") {

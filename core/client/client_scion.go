@@ -3,8 +3,8 @@ package client
 import (
 	"context"
 	"crypto/subtle"
+	"example.com/scion-time/base/netprovider"
 	"example.com/scion-time/base/timebase"
-	"example.com/scion-time/core/netcore"
 	"net"
 	"net/netip"
 	"time"
@@ -32,10 +32,11 @@ import (
 )
 
 type SCIONClient struct {
-	Lclk            timebase.LocalClock
-	DSCP            uint8
-	InterleavedMode bool
-	Auth            struct {
+	Lclk               timebase.LocalClock
+	ConnectionProvider netprovider.ConnProvider
+	DSCP               uint8
+	InterleavedMode    bool
+	Auth               struct {
 		Enabled      bool
 		NTSEnabled   bool
 		DRKeyFetcher *scion.Fetcher
@@ -121,7 +122,7 @@ func (c *SCIONClient) measureClockOffsetSCION(ctx context.Context, log *zap.Logg
 	}
 	var authKey []byte
 
-	conn, err := netcore.ListenUDP("udp", &net.UDPAddr{IP: localAddr.Host.IP})
+	conn, err := c.ConnectionProvider.ListenUDP("udp", &net.UDPAddr{IP: localAddr.Host.IP})
 	if err != nil {
 		return at, offset, weight, err
 	}
@@ -133,11 +134,11 @@ func (c *SCIONClient) measureClockOffsetSCION(ctx context.Context, log *zap.Logg
 			return at, offset, weight, err
 		}
 	}
-	err = netcore.EnableTimestamping(conn, localAddr.Host.Zone)
+	err = c.ConnectionProvider.EnableTimestamping(conn, localAddr.Host.Zone)
 	if err != nil {
 		log.Error("failed to enable timestamping", zap.Error(err))
 	}
-	err = netcore.SetDSCP(conn, c.DSCP)
+	err = c.ConnectionProvider.SetDSCP(conn, c.DSCP)
 	if err != nil {
 		log.Info("failed to set DSCP", zap.Error(err))
 	}
@@ -307,7 +308,7 @@ func (c *SCIONClient) measureClockOffsetSCION(ctx context.Context, log *zap.Logg
 	if n != len(buffer.Bytes()) {
 		return at, offset, weight, errWrite
 	}
-	cTxTime1, id, err := netcore.ReadTXTimestamp(conn)
+	cTxTime1, id, err := c.ConnectionProvider.ReadTXTimestamp(conn)
 	if err != nil || id != 0 {
 		cTxTime1 = c.Lclk.Now()
 		// TODO put this back

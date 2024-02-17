@@ -3,6 +3,7 @@ package benchmark
 import (
 	"context"
 	"crypto/tls"
+	"example.com/scion-time/base/netprovider"
 	"example.com/scion-time/base/timebase"
 	"net"
 	"os"
@@ -25,6 +26,7 @@ func RunSCIONBenchmark(
 	daemonAddr string,
 	localAddr, remoteAddr *snet.UDPAddr,
 	lclk timebase.LocalClock,
+	lnet netprovider.ConnProvider,
 	authModes []string,
 	ntskeServer string,
 	log *zap.Logger,
@@ -67,9 +69,10 @@ func RunSCIONBenchmark(
 			laddr := udp.UDPAddrFromSnet(localAddr)
 			raddr := udp.UDPAddrFromSnet(remoteAddr)
 			c := &client.SCIONClient{
-				Lclk:            lclk,
-				InterleavedMode: true,
-				Histo:           hg,
+				Lclk:               lclk,
+				ConnectionProvider: lnet,
+				InterleavedMode:    true,
+				Histo:              hg,
 			}
 
 			if contains(authModes, "spao") {

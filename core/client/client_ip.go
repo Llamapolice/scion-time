@@ -2,8 +2,8 @@ package client
 
 import (
 	"context"
+	"example.com/scion-time/base/netprovider"
 	"example.com/scion-time/base/timebase"
-	"example.com/scion-time/core/netcore"
 	"net"
 	"net/netip"
 	"time"
@@ -23,10 +23,11 @@ import (
 )
 
 type IPClient struct {
-	Lclk            timebase.LocalClock
-	DSCP            uint8
-	InterleavedMode bool
-	Auth            struct {
+	Lclk               timebase.LocalClock
+	ConnectionProvider netprovider.ConnProvider
+	DSCP               uint8
+	InterleavedMode    bool
+	Auth               struct {
 		Enabled      bool
 		NTSKEFetcher ntske.Fetcher
 	}
@@ -94,7 +95,7 @@ func (c *IPClient) ResetInterleavedMode() {
 func (c *IPClient) measureClockOffsetIP(ctx context.Context, log *zap.Logger, mtrcs *ipClientMetrics,
 	localAddr, remoteAddr *net.UDPAddr) (
 	at time.Time, offset time.Duration, weight float64, err error) {
-	conn, err := netcore.ListenUDP("udp", &net.UDPAddr{IP: localAddr.IP})
+	conn, err := c.ConnectionProvider.ListenUDP("udp", &net.UDPAddr{IP: localAddr.IP})
 	if err != nil {
 		return at, offset, weight, err
 	}
@@ -106,11 +107,11 @@ func (c *IPClient) measureClockOffsetIP(ctx context.Context, log *zap.Logger, mt
 			return at, offset, weight, err
 		}
 	}
-	err = netcore.EnableTimestamping(conn, localAddr.Zone)
+	err = c.ConnectionProvider.EnableTimestamping(conn, localAddr.Zone)
 	if err != nil {
 		log.Error("failed to enable timestamping", zap.Error(err))
 	}
-	err = netcore.SetDSCP(conn, c.DSCP)
+	err = c.ConnectionProvider.SetDSCP(conn, c.DSCP)
 	if err != nil {
 		log.Info("failed to set DSCP", zap.Error(err))
 	}
@@ -164,7 +165,7 @@ func (c *IPClient) measureClockOffsetIP(ctx context.Context, log *zap.Logger, mt
 	if n != len(buf) {
 		return at, offset, weight, errWrite
 	}
-	cTxTime1, id, err := netcore.ReadTXTimestamp(conn)
+	cTxTime1, id, err := c.ConnectionProvider.ReadTXTimestamp(conn)
 	if err != nil || id != 0 {
 		cTxTime1 = c.Lclk.Now()
 		log.Error("failed to read packet tx timestamp", zap.Error(err))

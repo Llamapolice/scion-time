@@ -128,9 +128,15 @@ func RunSimulation(
 	seed int64,
 	logger *zap.Logger,
 ) {
-	// Set up file package vars
 	log = logger
 	log.Info("\u001B[34mStarting simulation\u001B[0m")
+
+	// Some logic to read a config file and fill a settings struct
+	log.Debug("Reading config file", zap.String("config location", configFile))
+	var cfg SimConfigFile
+	core.LoadConfig(&cfg, configFile, log)
+
+	// Set up file package vars
 	receiver = make(chan simutils.SimPacket)
 	scanner = bufio.NewScanner(os.Stdin)
 	timeRequests = make(chan simutils.TimeRequest)
@@ -147,6 +153,9 @@ func RunSimulation(
 	log.Debug("Reading config file", zap.String("config location", configFile))
 	var cfg SimConfigFile
 	core.LoadConfig(&cfg, configFile, log)
+	var tmpaddr snet.UDPAddr
+	_ = tmpaddr.Set("1-ff00:0:111,10.1.1.20")
+	simConnector := simutils.NewSimConnector(log, "tool", &tmpaddr, receiver, deadlineRequests)
 
 	// Some set up to build the simulated network and start instances
 	// Register some channels into the sims
@@ -308,7 +317,7 @@ func RunSimulation(
 	raddr = udp.UDPAddrFromSnet(&raddrSNET)
 	ntpcs := []*client.SCIONClient{
 		// TODO configure this lclk
-		{Lclk: lclk, DSCP: 0, InterleavedMode: false},
+		{Lclk: lclk, ConnectionProvider: simConnector, DSCP: 0, InterleavedMode: false},
 	}
 	ps := []snet.Path{
 		path.Path{Src: laddrSNET.IA, Dst: raddrSNET.IA, DataplanePath: path.Empty{}},
@@ -341,11 +350,14 @@ func clientSetUp(i int, clnt core.SvcConfig) Client {
 	tmp := newClient(receiver)
 	tmp.Id += strconv.Itoa(i)
 
+	laddr := core.LocalAddress(clnt)
 	simClk := simutils.NewSimulationClock(int64(i), log, timeRequests, waitRequests)
 	tmp.LocalClk = simClk
 	laddr := core.LocalAddress(clnt)
+	simNet := simutils.NewSimConnector(log, tmp.Id, laddr, receiver, deadlineRequests)
+
 	laddr.Host.Port = 0
-	refClocks, netClocks := core.CreateClocks(clnt, laddr, simClk, log)
+	refClocks, netClocks := core.CreateClocks(clnt, laddr, simClk, simNet, log)
 	syncClks := sync.RegisterClocks(refClocks, netClocks)
 	syncClks.Id = tmp.Id
 	tmp.SyncClks = syncClks
@@ -363,6 +375,7 @@ func clientSetUp(i int, clnt core.SvcConfig) Client {
 		tmp.Conn = handleConnectionSetup(tmp.Id+"_conn", tmp.ReceiveFromInstance, tmp.SendToInstance)
 		log.Debug("Simulator received connection",
 			zap.String("relay id", tmp.Id), zap.String("connection id", tmp.Conn.Id))
+		server.StartSCIONDispatcher(tmp.Ctx, log, simClk, simNet, snet.CopyUDPAddr(laddr.Host))
 	}
 
 	if len(refClocks) != 0 {
@@ -385,12 +398,13 @@ func relaySetUp(i int, relay core.SvcConfig) Relay {
 	localAddr := core.LocalAddress(relay)
 	simClk := simutils.NewSimulationClock(int64(i), log, timeRequests, waitRequests)
 	tmp.LocalClk = simClk
+	simNet := simutils.NewSimConnector(log, tmp.Id, localAddr, receiver, deadlineRequests)
 
 	// Clock Sync
 	log.Debug("Starting clock sync")
 	simClk.Id = tmp.Id
 	localAddr.Host.Port = 0
-	refClocks, netClocks := core.CreateClocks(relay, localAddr, simClk, log)
+	refClocks, netClocks := core.CreateClocks(relay, localAddr, simClk, simNet, log)
 	syncClks := sync.RegisterClocks(refClocks, netClocks)
 	syncClks.Id = tmp.Id
 	tmp.SyncClks = syncClks
@@ -411,7 +425,7 @@ func relaySetUp(i int, relay core.SvcConfig) Relay {
 	localAddr.Host.Port = ntp.ServerPortSCION
 	dscp := core.Dscp(relay)
 	daemonAddr := core.DaemonAddress(relay)
-	server.StartSCIONServer(tmp.Ctx, log, simClk, daemonAddr, snet.CopyUDPAddr(localAddr.Host), dscp, tmp.Provider)
+	server.StartSCIONServer(tmp.Ctx, log, simClk, simNet, daemonAddr, snet.CopyUDPAddr(localAddr.Host), dscp, tmp.Provider)
 
 	tmp.Conn = handleConnectionSetup(tmp.Id+"_conn", tmp.ReceiveFromInstance, tmp.SendToInstance)
 	log.Debug("Simulator received connection",
@@ -427,12 +441,13 @@ func serverSetUp(i int, simServer core.SvcConfig) Server {
 	localAddr := core.LocalAddress(simServer)
 	simClk := simutils.NewSimulationClock(int64(i), log, timeRequests, waitRequests)
 	tmp.LocalClk = simClk
+	simNet := simutils.NewSimConnector(log, tmp.Id, localAddr, receiver, deadlineRequests)
 
 	// Clock Sync
 	log.Debug("Starting clock sync")
 	simClk.Id = tmp.Id
 	localAddr.Host.Port = 0
-	refClocks, netClocks := core.CreateClocks(simServer, localAddr, simClk, log)
+	refClocks, netClocks := core.CreateClocks(simServer, localAddr, simClk, simNet, log)
 	syncClks := sync.RegisterClocks(refClocks, netClocks)
 	syncClks.Id = tmp.Id
 	tmp.SyncClks = syncClks
@@ -456,7 +471,7 @@ func serverSetUp(i int, simServer core.SvcConfig) Server {
 	localAddr.Host.Port = ntp.ServerPortSCION
 	dscp := core.Dscp(simServer)
 	daemonAddr := core.DaemonAddress(simServer)
-	server.StartSCIONServer(tmp.Ctx, log, simClk, daemonAddr, snet.CopyUDPAddr(localAddr.Host), dscp, tmp.Provider)
+	server.StartSCIONServer(tmp.Ctx, log, simClk, simNet, daemonAddr, snet.CopyUDPAddr(localAddr.Host), dscp, tmp.Provider)
 
 	tmp.Conn = handleConnectionSetup(tmp.Id+"_conn", tmp.ReceiveFromInstance, tmp.SendToInstance)
 	log.Debug("Simulator received connection",

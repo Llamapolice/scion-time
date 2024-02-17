@@ -146,15 +146,15 @@ func runServer(configFile string) {
 	lclk := &clock.SystemClock{Log: log}
 	timecore.RegisterClock(lclk)
 
-	localAddr.Host.Port = 0
-	refClocks, netClocks := core.CreateClocks(cfg, localAddr, lclk, log)
-	syncClks := sync.RegisterClocks(refClocks, netClocks)
-
 	lcrypt := &crypto.SafeCrypto{Log: log}
 	cryptocore.RegisterCrypto(lcrypt)
 
 	lnet := &networking.UDPConnector{Log: log}
 	netcore.RegisterNetProvider(lnet)
+
+	localAddr.Host.Port = 0
+	refClocks, netClocks := core.CreateClocks(cfg, localAddr, lclk, lnet, log)
+	syncClks := sync.RegisterClocks(refClocks, netClocks)
 
 	if len(refClocks) != 0 {
 		sync.SyncToRefClocks(log, lclk, syncClks)
@@ -171,11 +171,11 @@ func runServer(configFile string) {
 
 	localAddr.Host.Port = ntp.ServerPortIP
 	server.StartNTSKEServerIP(ctx, log, copyIP(localAddr.Host.IP), localAddr.Host.Port, tlsConfig, provider)
-	server.StartIPServer(ctx, log, lclk, snet.CopyUDPAddr(localAddr.Host), dscp, provider)
+	server.StartIPServer(ctx, log, lclk, lnet, snet.CopyUDPAddr(localAddr.Host), dscp, provider)
 
 	localAddr.Host.Port = ntp.ServerPortSCION
 	server.StartNTSKEServerSCION(ctx, log, udp.UDPAddrFromSnet(localAddr), tlsConfig, provider)
-	server.StartSCIONServer(ctx, log, lclk, daemonAddr, snet.CopyUDPAddr(localAddr.Host), dscp, provider)
+	server.StartSCIONServer(ctx, log, lclk, lnet, daemonAddr, snet.CopyUDPAddr(localAddr.Host), dscp, provider)
 
 	runMonitor(log)
 }
@@ -191,15 +191,15 @@ func runRelay(configFile string) {
 	lclk := &clock.SystemClock{Log: log}
 	timecore.RegisterClock(lclk)
 
-	localAddr.Host.Port = 0
-	refClocks, netClocks := core.CreateClocks(cfg, localAddr, lclk, log)
-	syncClks := sync.RegisterClocks(refClocks, netClocks)
-
 	lcrypt := &crypto.SafeCrypto{Log: log}
 	cryptocore.RegisterCrypto(lcrypt)
 
 	lnet := &networking.UDPConnector{Log: log}
 	netcore.RegisterNetProvider(lnet)
+
+	localAddr.Host.Port = 0
+	refClocks, netClocks := core.CreateClocks(cfg, localAddr, lclk, lnet, log)
+	syncClks := sync.RegisterClocks(refClocks, netClocks)
 
 	if len(refClocks) != 0 {
 		sync.SyncToRefClocks(log, lclk, syncClks)
@@ -216,11 +216,11 @@ func runRelay(configFile string) {
 
 	localAddr.Host.Port = ntp.ServerPortIP
 	server.StartNTSKEServerIP(ctx, log, copyIP(localAddr.Host.IP), localAddr.Host.Port, tlsConfig, provider)
-	server.StartIPServer(ctx, log, lclk, snet.CopyUDPAddr(localAddr.Host), dscp, provider)
+	server.StartIPServer(ctx, log, lclk, lnet, snet.CopyUDPAddr(localAddr.Host), dscp, provider)
 
 	localAddr.Host.Port = ntp.ServerPortSCION
 	server.StartNTSKEServerSCION(ctx, log, udp.UDPAddrFromSnet(localAddr), tlsConfig, provider)
-	server.StartSCIONServer(ctx, log, lclk, daemonAddr, snet.CopyUDPAddr(localAddr.Host), dscp, provider)
+	server.StartSCIONServer(ctx, log, lclk, lnet, daemonAddr, snet.CopyUDPAddr(localAddr.Host), dscp, provider)
 
 	runMonitor(log)
 }
@@ -235,15 +235,15 @@ func runClient(configFile string) {
 	lclk := &clock.SystemClock{Log: log}
 	timecore.RegisterClock(lclk)
 
-	localAddr.Host.Port = 0
-	refClocks, netClocks := core.CreateClocks(cfg, localAddr, lclk, log)
-	syncClks := sync.RegisterClocks(refClocks, netClocks)
-
 	lcrypt := &crypto.SafeCrypto{Log: log}
 	cryptocore.RegisterCrypto(lcrypt)
 
 	lnet := &networking.UDPConnector{Log: log}
 	netcore.RegisterNetProvider(lnet)
+
+	localAddr.Host.Port = 0
+	refClocks, netClocks := core.CreateClocks(cfg, localAddr, lclk, lnet, log)
+	syncClks := sync.RegisterClocks(refClocks, netClocks)
 
 	scionClocksAvailable := false
 	for _, c := range refClocks {
@@ -254,7 +254,7 @@ func runClient(configFile string) {
 		}
 	}
 	if scionClocksAvailable {
-		server.StartSCIONDispatcher(ctx, log, lclk, snet.CopyUDPAddr(localAddr.Host))
+		server.StartSCIONDispatcher(ctx, log, lclk, lnet, snet.CopyUDPAddr(localAddr.Host))
 	}
 
 	if len(refClocks) != 0 {
@@ -285,9 +285,10 @@ func runIPTool(localAddr, remoteAddr *snet.UDPAddr, dscp uint8,
 	laddr := localAddr.Host
 	raddr := remoteAddr.Host
 	c := &client.IPClient{
-		Lclk:            lclk,
-		DSCP:            dscp,
-		InterleavedMode: true,
+		Lclk:               lclk,
+		ConnectionProvider: lnet,
+		DSCP:               dscp,
+		InterleavedMode:    true,
 	}
 	if core.Contains(authModes, core.AuthModeNTS) {
 		core.ConfigureIPClientNTS(c, ntskeServer, ntskeInsecureSkipVerify, log)
@@ -321,10 +322,10 @@ func runSCIONTool(daemonAddr, dispatcherMode string, localAddr, remoteAddr *snet
 	netcore.RegisterNetProvider(lnet)
 
 	if dispatcherMode == dispatcherModeInternal {
-		server.StartSCIONDispatcher(ctx, log, lclk, snet.CopyUDPAddr(localAddr.Host))
+		server.StartSCIONDispatcher(ctx, log, lclk, lnet, snet.CopyUDPAddr(localAddr.Host))
 	}
 
-	dc := netcore.NewDaemonConnector(ctx, daemonAddr)
+	dc := lnet.NewDaemonConnector(ctx, daemonAddr)
 
 	var ps []snet.Path
 	if remoteAddr.IA.Equal(localAddr.IA) {
@@ -347,9 +348,10 @@ func runSCIONTool(daemonAddr, dispatcherMode string, localAddr, remoteAddr *snet
 	laddr := udp.UDPAddrFromSnet(localAddr)
 	raddr := udp.UDPAddrFromSnet(remoteAddr)
 	c := &client.SCIONClient{
-		Lclk:            lclk,
-		DSCP:            dscp,
-		InterleavedMode: true,
+		Lclk:               lclk,
+		ConnectionProvider: lnet,
+		DSCP:               dscp,
+		InterleavedMode:    true,
 	}
 	if core.Contains(authModes, core.AuthModeSPAO) {
 		c.Auth.Enabled = true
@@ -399,7 +401,7 @@ func runIPBenchmark(localAddr, remoteAddr *snet.UDPAddr, authModes []string, nts
 	lnet := &networking.UDPConnector{Log: zap.NewNop()}
 	netcore.RegisterNetProvider(lnet)
 
-	benchmark.RunIPBenchmark(localAddr.Host, remoteAddr.Host, lclk, authModes, ntskeServer, log)
+	benchmark.RunIPBenchmark(localAddr.Host, remoteAddr.Host, lclk, lnet, authModes, ntskeServer, log)
 }
 
 func runSCIONBenchmark(daemonAddr string, localAddr, remoteAddr *snet.UDPAddr, authModes []string, ntskeServer string, log *zap.Logger) {
@@ -412,7 +414,7 @@ func runSCIONBenchmark(daemonAddr string, localAddr, remoteAddr *snet.UDPAddr, a
 	lnet := &networking.UDPConnector{Log: zap.NewNop()}
 	netcore.RegisterNetProvider(lnet)
 
-	benchmark.RunSCIONBenchmark(daemonAddr, localAddr, remoteAddr, lclk, authModes, ntskeServer, log)
+	benchmark.RunSCIONBenchmark(daemonAddr, localAddr, remoteAddr, lclk, lnet, authModes, ntskeServer, log)
 }
 
 func runSimulation(seed int64, configFile string) {

@@ -4,7 +4,6 @@ import (
 	"context"
 	"example.com/scion-time/base/netprovider"
 	"example.com/scion-time/base/timebase"
-	"example.com/scion-time/core/netcore"
 	"net"
 	"strconv"
 	"time"
@@ -49,14 +48,22 @@ func newIPServerMetrics() *ipServerMetrics {
 	}
 }
 
-func runIPServer(log *zap.Logger, mtrcs *ipServerMetrics, lclk timebase.LocalClock,
-	conn netprovider.Connection, iface string, dscp uint8, provider *ntske.Provider) {
+func runIPServer(
+	log *zap.Logger,
+	mtrcs *ipServerMetrics,
+	lclk timebase.LocalClock,
+	lnet netprovider.ConnProvider,
+	conn netprovider.Connection,
+	iface string,
+	dscp uint8,
+	provider *ntske.Provider,
+) {
 	defer conn.Close()
-	err := netcore.EnableTimestamping(conn, iface)
+	err := lnet.EnableTimestamping(conn, iface)
 	if err != nil {
 		log.Error("failed to enable timestamping", zap.Error(err))
 	}
-	err = netcore.SetDSCP(conn, dscp)
+	err = lnet.SetDSCP(conn, dscp)
 	if err != nil {
 		log.Info("failed to set DSCP", zap.Error(err))
 	}
@@ -186,7 +193,7 @@ func runIPServer(log *zap.Logger, mtrcs *ipServerMetrics, lclk timebase.LocalClo
 			log.Error("failed to write packet", zap.Error(err))
 			continue
 		}
-		txt1, id, err := netcore.ReadTXTimestamp(conn)
+		txt1, id, err := lnet.ReadTXTimestamp(conn)
 		if err != nil {
 			txt1 = txt0
 			log.Error("failed to read packet tx timestamp", zap.Error(err))
@@ -203,8 +210,15 @@ func runIPServer(log *zap.Logger, mtrcs *ipServerMetrics, lclk timebase.LocalClo
 	}
 }
 
-func StartIPServer(ctx context.Context, log *zap.Logger, lclk timebase.LocalClock,
-	localHost *net.UDPAddr, dscp uint8, provider *ntske.Provider) {
+func StartIPServer(
+	ctx context.Context,
+	log *zap.Logger,
+	lclk timebase.LocalClock,
+	lnet netprovider.ConnProvider,
+	localHost *net.UDPAddr,
+	dscp uint8,
+	provider *ntske.Provider,
+) {
 	log.Info("server listening via IP",
 		zap.Stringer("ip", localHost.IP),
 		zap.Int("port", localHost.Port),
@@ -213,19 +227,19 @@ func StartIPServer(ctx context.Context, log *zap.Logger, lclk timebase.LocalCloc
 	mtrcs := newIPServerMetrics()
 
 	if ipServerNumGoroutine == 1 {
-		conn, err := netcore.ListenUDP("udp", localHost)
+		conn, err := lnet.ListenUDP("udp", localHost)
 		if err != nil {
 			log.Fatal("failed to listen for packets", zap.Error(err))
 		}
-		go runIPServer(log, mtrcs, lclk, conn, localHost.Zone, dscp, provider)
+		go runIPServer(log, mtrcs, lclk, lnet, conn, localHost.Zone, dscp, provider)
 	} else {
 		for i := ipServerNumGoroutine; i > 0; i-- {
-			conn, err := netcore.ListenPacket("udp",
+			conn, err := lnet.ListenPacket("udp",
 				net.JoinHostPort(localHost.IP.String(), strconv.Itoa(localHost.Port)))
 			if err != nil {
 				log.Fatal("failed to listen for packets", zap.Error(err))
 			}
-			go runIPServer(log, mtrcs, lclk, conn.(netprovider.Connection), localHost.Zone, dscp, provider)
+			go runIPServer(log, mtrcs, lclk, lnet, conn.(netprovider.Connection), localHost.Zone, dscp, provider)
 		}
 	}
 }

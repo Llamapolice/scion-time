@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
+	"example.com/scion-time/base/netprovider"
 	"example.com/scion-time/base/timebase"
 	"example.com/scion-time/core/client"
 	"example.com/scion-time/driver/mbg"
@@ -100,7 +101,13 @@ func LoadConfig[T any](cfgStruct T, configFile string, log *zap.Logger) { // T i
 }
 
 // Originally in timeservice.go
-func CreateClocks(cfg SvcConfig, localAddr *snet.UDPAddr, lclk timebase.LocalClock, log *zap.Logger) (
+func CreateClocks(
+	cfg SvcConfig,
+	localAddr *snet.UDPAddr,
+	lclk timebase.LocalClock,
+	lnet netprovider.ConnProvider,
+	log *zap.Logger,
+) (
 	refClocks, netClocks []client.ReferenceClock) {
 	dscp := Dscp(cfg)
 
@@ -130,6 +137,7 @@ func CreateClocks(cfg SvcConfig, localAddr *snet.UDPAddr, lclk timebase.LocalClo
 				udp.UDPAddrFromSnet(localAddr),
 				udp.UDPAddrFromSnet(remoteAddr),
 				lclk,
+				lnet,
 				dscp,
 				cfg.AuthModes,
 				ntskeServer,
@@ -142,6 +150,7 @@ func CreateClocks(cfg SvcConfig, localAddr *snet.UDPAddr, lclk timebase.LocalClo
 				localAddr.Host,
 				remoteAddr.Host,
 				lclk,
+				lnet,
 				dscp,
 				cfg.AuthModes,
 				ntskeServer,
@@ -165,6 +174,7 @@ func CreateClocks(cfg SvcConfig, localAddr *snet.UDPAddr, lclk timebase.LocalClo
 			udp.UDPAddrFromSnet(localAddr),
 			udp.UDPAddrFromSnet(remoteAddr),
 			lclk,
+			lnet,
 			dscp,
 			cfg.AuthModes,
 			ntskeServer,
@@ -177,7 +187,7 @@ func CreateClocks(cfg SvcConfig, localAddr *snet.UDPAddr, lclk timebase.LocalClo
 	daemonAddr := DaemonAddress(cfg)
 	if daemonAddr != "" {
 		ctx := context.Background()
-		pather := scion.StartPather(ctx, log, daemonAddr, dstIAs)
+		pather := scion.StartPather(ctx, log, lnet, daemonAddr, dstIAs)
 		var drkeyFetcher *scion.Fetcher
 		if Contains(cfg.AuthModes, AuthModeSPAO) {
 			drkeyFetcher = scion.NewFetcher(scion.NewDaemonConnector(ctx, daemonAddr))
@@ -270,17 +280,27 @@ func DaemonAddress(cfg SvcConfig) string {
 	return da
 }
 
-func NewNTPReferenceClockSCION(daemonAddr string, localAddr, remoteAddr udp.UDPAddr, lclk timebase.LocalClock, dscp uint8,
-	authModes []string, ntskeServer string, ntskeInsecureSkipVerify bool, log *zap.Logger) *NtpReferenceClockSCION {
+func NewNTPReferenceClockSCION(
+	daemonAddr string,
+	localAddr, remoteAddr udp.UDPAddr,
+	lclk timebase.LocalClock,
+	lnet netprovider.ConnProvider,
+	dscp uint8,
+	authModes []string,
+	ntskeServer string,
+	ntskeInsecureSkipVerify bool,
+	log *zap.Logger,
+) *NtpReferenceClockSCION {
 	c := &NtpReferenceClockSCION{
 		localAddr:  localAddr,
 		remoteAddr: remoteAddr,
 	}
 	for i := 0; i != len(c.ntpcs); i++ {
 		c.ntpcs[i] = &client.SCIONClient{
-			Lclk:            lclk,
-			DSCP:            dscp,
-			InterleavedMode: true,
+			Lclk:               lclk,
+			ConnectionProvider: lnet,
+			DSCP:               dscp,
+			InterleavedMode:    true,
 		}
 		if Contains(authModes, AuthModeNTS) {
 			ConfigureSCIONClientNTS(c.ntpcs[i], ntskeServer, ntskeInsecureSkipVerify, daemonAddr, localAddr, remoteAddr, log)
@@ -289,16 +309,25 @@ func NewNTPReferenceClockSCION(daemonAddr string, localAddr, remoteAddr udp.UDPA
 	return c
 }
 
-func NewNTPReferenceClockIP(localAddr, remoteAddr *net.UDPAddr, lclk timebase.LocalClock, dscp uint8,
-	authModes []string, ntskeServer string, ntskeInsecureSkipVerify bool, log *zap.Logger) *NtpReferenceClockIP {
+func NewNTPReferenceClockIP(
+	localAddr, remoteAddr *net.UDPAddr,
+	lclk timebase.LocalClock,
+	connprov netprovider.ConnProvider,
+	dscp uint8,
+	authModes []string,
+	ntskeServer string,
+	ntskeInsecureSkipVerify bool,
+	log *zap.Logger,
+) *NtpReferenceClockIP {
 	c := &NtpReferenceClockIP{
 		localAddr:  localAddr,
 		remoteAddr: remoteAddr,
 	}
 	c.ntpc = &client.IPClient{
-		Lclk:            lclk,
-		DSCP:            dscp,
-		InterleavedMode: true,
+		Lclk:               lclk,
+		ConnectionProvider: connprov,
+		DSCP:               dscp,
+		InterleavedMode:    true,
 	}
 	if Contains(authModes, AuthModeNTS) {
 		ConfigureIPClientNTS(c.ntpc, ntskeServer, ntskeInsecureSkipVerify, log)
