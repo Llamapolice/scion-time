@@ -6,7 +6,6 @@ import (
 	"example.com/scion-time/core"
 	"example.com/scion-time/core/client"
 	"example.com/scion-time/core/cryptocore"
-	"example.com/scion-time/core/netcore"
 	"example.com/scion-time/core/server"
 	"example.com/scion-time/core/sync"
 	"example.com/scion-time/net/ntp"
@@ -110,13 +109,14 @@ func newRelay(receiver chan simutils.SimPacket) (r Relay) {
 }
 
 var (
-	log                   *zap.Logger
-	receiver              chan simutils.SimPacket
-	handleConnectionSetup func(
-		id string,
-		receiveFromInstance chan simutils.SimPacket,
-		sendToInstance chan simutils.SimPacket,
-	) *simutils.SimConnection
+	log           *zap.Logger
+	receiver      chan simutils.SimPacket
+	simConnectors []*simutils.SimConnector
+	//handleConnectionSetup func(
+	//	id string,
+	//	receiveFromInstance chan simutils.SimPacket,
+	//	sendToInstance chan simutils.SimPacket,
+	//) *simutils.SimConnection
 	scanner          *bufio.Scanner
 	timeRequests     chan simutils.TimeRequest
 	waitRequests     chan simutils.WaitRequest
@@ -138,6 +138,7 @@ func RunSimulation(
 
 	// Set up file package vars
 	receiver = make(chan simutils.SimPacket)
+	simConnectors = make([]*simutils.SimConnector, 0, len(cfg.Clients)+len(cfg.Relays)+len(cfg.Servers)+1)
 	scanner = bufio.NewScanner(os.Stdin)
 	timeRequests = make(chan simutils.TimeRequest)
 	waitRequests = make(chan simutils.WaitRequest)
@@ -146,28 +147,24 @@ func RunSimulation(
 	lcrypt := simutils.NewSimCrypto(seed, log)
 	cryptocore.RegisterCrypto(lcrypt)
 
-	simConnector := simutils.NewSimConnector(log, deadlineRequests)
-	netcore.RegisterNetProvider(simConnector)
-
-	// Some logic to read a config file and fill a settings struct
-	log.Debug("Reading config file", zap.String("config location", configFile))
-	var cfg SimConfigFile
-	core.LoadConfig(&cfg, configFile, log)
 	var tmpaddr snet.UDPAddr
 	_ = tmpaddr.Set("1-ff00:0:111,10.1.1.20")
 	simConnector := simutils.NewSimConnector(log, "tool", &tmpaddr, receiver, deadlineRequests)
+	simConnectors = append(simConnectors, simConnector)
+	//netcore.RegisterNetProvider(simConnector)
 
 	// Some set up to build the simulated network and start instances
 	// Register some channels into the sims
 	// Size 2 as to not block since the connection is opened within the main routine
-	simConnectionListener := make(chan *simutils.SimConnection, 2)
-	simConnector.CallBack = simConnectionListener
+	//simConnectionListener := make(chan *simutils.SimConnection, 2)
+	//simConnector.CallBack = simConnectionListener
 
-	receivingInstances := make(map[string]chan simutils.SimPacket)
+	//receivingInstances := make(map[string]chan simutils.SimPacket)
 
 	// Bare-bones message handler to pass messages around
 	go func() {
 		log.Info("\u001B[34mMessage handler started\u001B[0m")
+	skip:
 		for msg := range receiver {
 			log.Debug(
 				"Message handler received message",
@@ -175,14 +172,23 @@ func RunSimulation(
 				zap.String("target", msg.TargetAddr.String()),
 				zap.String("source", msg.SourceAddr.String()),
 			)
-			receivingInstance, exists := receivingInstances[msg.TargetAddr.String()]
-			if exists {
-				receivingInstance <- msg
-				log.Debug("Passed message on to instance")
-			} else {
-				log.Warn("Targeted address does not exist in the map (yet), message dropped",
-					zap.String("target", msg.TargetAddr.String()))
+			//receivingInstance, exists := receivingInstances[msg.TargetAddr.String()]
+			//if exists {
+			//	receivingInstance <- msg
+			//	log.Debug("Passed message on to instance")
+			//} else {
+			targetAddr := msg.TargetAddr.Addr().WithZone("").Unmap()
+			for _, simConn := range simConnectors {
+				laddrPort := simConn.LocalAddress.Host.AddrPort()
+				simConnLocalAddress := laddrPort.Addr().WithZone("").Unmap()
+				if simConnLocalAddress == targetAddr {
+					simConn.Input <- msg
+					log.Debug("Passed message on to instance")
+					continue skip
+				}
 			}
+			log.Warn("Targeted address does not exist (yet), message dropped",
+				zap.String("target", targetAddr.String()))
 		}
 		log.Info("\u001B[34mMessage handler terminating\u001B[0m")
 	}()
@@ -222,38 +228,21 @@ func RunSimulation(
 					log.Debug("Time handler unblocks a sleeper", zap.String("id", shortestRequest.Id))
 					shortestRequest.Unblock <- struct{}{}
 				}
-				is := make([]int, len(deadlines))
+				is := make([]int, 0)
 				for i, deadline := range deadlines {
 					if deadline.Deadline.Before(now) {
 						deadline.Unblock <- struct{}{}
 						is = append(is, i)
 					}
 				}
+				adj := 0
 				for _, i := range is {
-					deadlines = append(deadlines[:i], deadlines[i+1:]...)
+					deadlines = append(deadlines[:i-adj], deadlines[i-adj+1:]...)
+					adj += 1 // This is to adjust the indices when multiple are to be removed
 				}
 			}
 		}
 	}()
-
-	// Helper func to do the repetitive part of handling connections
-	// Not a standalone function to not have to pass the connection listener and receiver map all the time
-	handleConnectionSetup = func(id string, receiveFromInstance, sendToInstance chan simutils.SimPacket) *simutils.SimConnection {
-		tmpConn := <-simConnectionListener
-		tmpConn.Id = id
-		senderChan := make(chan simutils.SimPacket)
-		tmpConn.WriteTo = receiveFromInstance
-		if sendToInstance != nil {
-			senderChan = sendToInstance
-		}
-		tmpConn.ReadFrom = senderChan
-		log.Debug("Subscribing addresses", zap.String("LocalAddr()", tmpConn.LocalAddr().String()),
-			zap.String("Laddr.AddrPort", tmpConn.LAddr.AddrPort().String()))
-		//zap.String("Laddr.String()", tmpConn.LAddr.String()))
-		receivingInstances[tmpConn.LocalAddr().String()] = senderChan      // both cause im out of ideas for now
-		receivingInstances[tmpConn.LAddr.AddrPort().String()] = senderChan // maybe now it wants this address?
-		return tmpConn
-	}
 
 	log.Info("\u001B[34mSetting up Servers\u001B[0m", zap.Int("amount", len(cfg.Servers)))
 	simServers := make([]Server, len(cfg.Servers))
@@ -353,8 +342,8 @@ func clientSetUp(i int, clnt core.SvcConfig) Client {
 	laddr := core.LocalAddress(clnt)
 	simClk := simutils.NewSimulationClock(int64(i), log, timeRequests, waitRequests)
 	tmp.LocalClk = simClk
-	laddr := core.LocalAddress(clnt)
 	simNet := simutils.NewSimConnector(log, tmp.Id, laddr, receiver, deadlineRequests)
+	simConnectors = append(simConnectors, simNet)
 
 	laddr.Host.Port = 0
 	refClocks, netClocks := core.CreateClocks(clnt, laddr, simClk, simNet, log)
@@ -371,11 +360,10 @@ func clientSetUp(i int, clnt core.SvcConfig) Client {
 		}
 	}
 	if scionClocksAvailable {
-		server.StartSCIONDispatcher(tmp.Ctx, log, simClk, snet.CopyUDPAddr(laddr.Host))
-		tmp.Conn = handleConnectionSetup(tmp.Id+"_conn", tmp.ReceiveFromInstance, tmp.SendToInstance)
-		log.Debug("Simulator received connection",
-			zap.String("relay id", tmp.Id), zap.String("connection id", tmp.Conn.Id))
 		server.StartSCIONDispatcher(tmp.Ctx, log, simClk, simNet, snet.CopyUDPAddr(laddr.Host))
+		//tmp.Conn = handleConnectionSetup(tmp.Id+"_conn", tmp.ReceiveFromInstance, tmp.SendToInstance)
+		//log.Debug("Simulator received connection",
+		//	zap.String("relay id", tmp.Id), zap.String("connection id", tmp.Conn.Id))
 	}
 
 	if len(refClocks) != 0 {
@@ -399,6 +387,7 @@ func relaySetUp(i int, relay core.SvcConfig) Relay {
 	simClk := simutils.NewSimulationClock(int64(i), log, timeRequests, waitRequests)
 	tmp.LocalClk = simClk
 	simNet := simutils.NewSimConnector(log, tmp.Id, localAddr, receiver, deadlineRequests)
+	simConnectors = append(simConnectors, simNet)
 
 	// Clock Sync
 	log.Debug("Starting clock sync")
@@ -427,7 +416,7 @@ func relaySetUp(i int, relay core.SvcConfig) Relay {
 	daemonAddr := core.DaemonAddress(relay)
 	server.StartSCIONServer(tmp.Ctx, log, simClk, simNet, daemonAddr, snet.CopyUDPAddr(localAddr.Host), dscp, tmp.Provider)
 
-	tmp.Conn = handleConnectionSetup(tmp.Id+"_conn", tmp.ReceiveFromInstance, tmp.SendToInstance)
+	//tmp.Conn = handleConnectionSetup(tmp.Id+"_conn", tmp.ReceiveFromInstance, tmp.SendToInstance)
 	log.Debug("Simulator received connection",
 		zap.String("relay id", tmp.Id), zap.String("connection id", tmp.Conn.Id))
 	return tmp
@@ -442,6 +431,7 @@ func serverSetUp(i int, simServer core.SvcConfig) Server {
 	simClk := simutils.NewSimulationClock(int64(i), log, timeRequests, waitRequests)
 	tmp.LocalClk = simClk
 	simNet := simutils.NewSimConnector(log, tmp.Id, localAddr, receiver, deadlineRequests)
+	simConnectors = append(simConnectors, simNet)
 
 	// Clock Sync
 	log.Debug("Starting clock sync")
@@ -460,8 +450,8 @@ func serverSetUp(i int, simServer core.SvcConfig) Server {
 	if len(netClocks) != 0 {
 		log.Debug("Found net clocks", zap.Int("amount", len(netClocks)))
 		go sync.RunGlobalClockSync(log, simClk, syncClks)
-		tmpSyncConn := handleConnectionSetup(tmp.Id+"_netSync", tmp.ReceiveFromInstance, nil)
-		log.Debug("Received sync connection", zap.String("local addr", tmpSyncConn.LAddr.String()))
+		//tmpSyncConn := handleConnectionSetup(tmp.Id+"_netSync", tmp.ReceiveFromInstance, nil)
+		//log.Debug("Received sync connection", zap.String("local addr", tmpSyncConn.LAddr.String()))
 	}
 	log.Debug("Clock sync active")
 	log.Debug("\u001B[34mPress Enter to continue to server start\u001B[0m")
@@ -473,9 +463,9 @@ func serverSetUp(i int, simServer core.SvcConfig) Server {
 	daemonAddr := core.DaemonAddress(simServer)
 	server.StartSCIONServer(tmp.Ctx, log, simClk, simNet, daemonAddr, snet.CopyUDPAddr(localAddr.Host), dscp, tmp.Provider)
 
-	tmp.Conn = handleConnectionSetup(tmp.Id+"_conn", tmp.ReceiveFromInstance, tmp.SendToInstance)
-	log.Debug("Simulator received connection",
-		zap.String("server id", tmp.Id), zap.String("connection id", tmp.Conn.Id),
-		zap.String("conn laddr", tmp.Conn.LAddr.String()))
+	//tmp.Conn = handleConnectionSetup(tmp.Id+"_conn", tmp.ReceiveFromInstance, tmp.SendToInstance)
+	//log.Debug("Simulator received connection",
+	//	zap.String("server id", tmp.Id), zap.String("connection id", tmp.Conn.Id),
+	//	zap.String("conn laddr", tmp.Conn.LAddr.String()))
 	return tmp
 }

@@ -18,32 +18,29 @@ type SimConnection struct {
 	// Following are temporary, might be nice for debugging, but might change
 	DSCP uint8
 	// These are used by the SimConnector to handle connections
-	UseCounter         int
 	Closed             bool
 	Network            string
 	LAddr              *net.UDPAddr
-	PortReleaseMsgChan chan PortReleaseMsg
+	ConnectionsHandler chan RequestFromMapHandler
 	RequestDeadline    chan DeadlineRequest
 }
 
 func (S *SimConnection) Close() error {
-	//TODO implement me
-	S.Log.Debug("Closing SimConnection", zap.String("conn id", S.Id))
-	S.UseCounter += 1
 	if S.Closed {
 		S.Log.Error("Trying to close already closed connection",
 			zap.String("conn id", S.Id), zap.String("conn laddr", S.LAddr.String()))
 		return nil
 	}
 	S.Closed = true
-	usedPort := S.LAddr.Port
-	S.Log.Debug("Releasing port for further use",
-		zap.Int("released port", usedPort), zap.String("laddr", S.LAddr.String()))
-	S.LAddr.Port = 0
-	S.PortReleaseMsgChan <- PortReleaseMsg{
-		Owner: S.Network + S.LAddr.String(),
-		Port:  usedPort,
+	tmp := make(chan interface{})
+	S.ConnectionsHandler <- RequestFromMapHandler{
+		Todo: func() int {
+			return S.LAddr.Port
+		},
+		ReturnBack: tmp,
 	}
+	<-tmp
+	close(S.ReadFrom)
 	S.Log.Debug("Closed simulated connection",
 		zap.String("connection id", S.Id), zap.String("network", S.Network))
 	return nil
@@ -66,9 +63,6 @@ func (S *SimConnection) ReadMsgUDPAddrPort(buf []byte, oob []byte) (
 
 	msg := <-S.ReadFrom
 	S.Log.Debug("Received message", zap.String("connection id", S.Id))
-	if S.Closed {
-		S.Log.Error("Message received on closed connection")
-	}
 	data := msg.B
 	if len(data) > cap(buf) {
 		S.Log.Error("Buffer passed to ReadMsgUDPAddrPort is too small",
@@ -90,33 +84,25 @@ func (S *SimConnection) ReadMsgUDPAddrPort(buf []byte, oob []byte) (
 }
 
 func (S *SimConnection) WriteToUDPAddrPort(b []byte, addr netip.AddrPort) (int, error) {
-	//TODO implement me
 	S.Log.Debug("Message to be written", zap.String("connection id", S.Id), zap.Binary("msg", b),
 		zap.String("target addr", addr.String()), zap.String("originating addr", S.LAddr.AddrPort().String()))
 	if addr.Port() == 0 {
 		S.Log.Fatal("Writing to port 0 is not possible")
-	}
-	for S.WriteTo == nil {
-		// Wait for main simulator routine to initialize channel
-		time.Sleep(time.Microsecond)
 	}
 	S.WriteTo <- SimPacket{B: b, TargetAddr: addr, SourceAddr: S.LAddr.AddrPort()}
 	return len(b), nil
 }
 
 func (S *SimConnection) SetDeadline(t time.Time) error {
-	//TODO implement me correctly
 	S.Log.Debug("Connection getting a deadline",
 		zap.String("conn id", S.Id), zap.Time("deadline", t))
 	S.Deadline = t
 	sleepDuration := time.Until(t)
-	useCounter := S.UseCounter
 	go func() {
-		//time.Sleep(sleepDuration)
 		unblock := make(chan interface{})
 		S.RequestDeadline <- DeadlineRequest{Id: S.Id, Deadline: t, Unblock: unblock}
 		<-unblock
-		if S.UseCounter != useCounter {
+		if S.Closed {
 			S.Log.Debug("Already closed connection timed out",
 				zap.String("conn id", S.Id))
 			return

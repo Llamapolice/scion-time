@@ -12,6 +12,7 @@ import (
 	"github.com/scionproto/scion/pkg/snet/path"
 	"go.uber.org/zap"
 	"net"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -77,14 +78,25 @@ func (s SimDaemonConnector) Close() error {
 var _ daemon.Connector = (*SimDaemonConnector)(nil)
 
 type SimConnector struct {
-	CallBack chan *SimConnection
+	Id           string
+	LocalAddress *snet.UDPAddr
+	// This channel is where all messages to this SimConnector's corresponding IP address are sent
+	Input chan SimPacket
 
-	log                *zap.Logger
-	port               int
-	ports              map[string]int
-	connections        map[string]*SimConnection
-	portReleaseMsgChan chan PortReleaseMsg
-	requestDeadline    chan DeadlineRequest
+	log *zap.Logger
+	// This channel is where all spawned SimConnection write to
+	globalMessageBus chan SimPacket
+	// Current port number to be assigned to the next SimConnection
+	port int
+	// Mapping from ports to the corresponding SimConnection;s input channel
+	connections map[int]chan SimPacket
+	// Channel to request deletion or insertion in connections map using RequestFromMapHandler structs
+	connectionsHandler chan RequestFromMapHandler
+	// This Channel gets passed to created SimConnection to enable their deadline functionality via the local clock
+	requestDeadline chan DeadlineRequest
+
+	// Counter for how many times the port has reached 60k and restarted at 10k (probably not useful)
+	portCycles int
 }
 
 func (s *SimConnector) NewDaemonConnector(ctx context.Context, daemonAddr string) daemon.Connector {
@@ -103,67 +115,95 @@ func (s *SimConnector) NewDaemonConnector(ctx context.Context, daemonAddr string
 	}
 }
 
-func NewSimConnector(log *zap.Logger, requestDeadline chan DeadlineRequest) *SimConnector {
-	log.Info("Creating a new sim connector")
-	portChan := make(chan PortReleaseMsg)
-	ports := make(map[string]int)
-	// This goroutine is responsible for returning ports to the respective address's pool when the connection closes
+func NewSimConnector(
+	log *zap.Logger,
+	id string,
+	laddr *snet.UDPAddr,
+	globalMessageBus chan SimPacket,
+	requestDeadline chan DeadlineRequest,
+) *SimConnector {
+	id = id + "_SimConnector"
+	log.Info("Creating a new sim connector", zap.String("id", id), zap.String("laddr", laddr.String()))
+
+	connections := make(map[int]chan SimPacket)
+	connectionsHandlerInput := make(chan RequestFromMapHandler)
 	go func() {
-		for m := range portChan {
-			ports[m.Owner] = m.Port
+		// See doc for RequestFromMapHandler for some explanations
+		for request := range connectionsHandlerInput {
+			port := request.Todo()
+			if port >= 0 {
+				delete(connections, port)
+			}
+			request.ReturnBack <- port
+			close(request.ReturnBack)
 		}
 	}()
+
+	input := make(chan SimPacket)
+	go func() {
+		// This goroutine distributes incoming messages to the corresponding connection based on ports
+		for msg := range input {
+			port := int(msg.TargetAddr.Port())
+			log.Debug("Message received", zap.String("connector id", id), zap.Int("target port", port))
+			conn, ok := connections[port]
+			if !ok {
+				log.Error("Received packet for unknown connection", zap.String("targetAddr", msg.TargetAddr.String()))
+				continue
+			}
+			conn <- msg
+		}
+	}()
+
 	return &SimConnector{
+		Id:                 id,
+		LocalAddress:       laddr,
+		Input:              input,
 		log:                log,
-		port:               1000,
-		connections:        make(map[string]*SimConnection),
-		ports:              ports,
-		portReleaseMsgChan: portChan,
+		globalMessageBus:   globalMessageBus,
+		port:               10000,
+		connections:        connections,
+		connectionsHandler: connectionsHandlerInput,
 		requestDeadline:    requestDeadline,
+		portCycles:         0,
 	}
 }
 
 func (s *SimConnector) ListenUDP(network string, laddr *net.UDPAddr) (netprovider.Connection, error) {
 	s.log.Info("Opening a sim connection")
 	if laddr.Port == 0 {
-		prevPort, existsP := s.ports[network+laddr.String()]
-		if existsP {
-			laddr.Port = prevPort
-		} else {
-			p := 1
-			laddr.Port = p
-			s.ports[network+laddr.String()] = p + 1
+		laddr.Port = s.port // TODO is modifying the laddr here an issue?
+		s.port += 1
+		if s.port == 60000 {
+			s.log.Warn("Created 50000 connections from one connector", zap.String("connector id", s.Id))
+			s.port = 10000
+			s.portCycles += 1
 		}
 		s.log.Debug("Incoming port is 0, assigned one by SimConnector",
 			zap.Int("new port", laddr.Port))
 	}
-	prevConn, exists := s.connections[network+laddr.String()]
-	if exists && prevConn.Closed {
-		s.log.Debug("Found previous connection, reusing that and not passing it back")
-		prevConn.Closed = false
-		prevConn.LAddr.Port = laddr.Port
-		return prevConn, nil
-	} else if exists {
-		s.log.Fatal("Connection already exists but has not been closed yet",
-			zap.String("laddr", laddr.String()))
-	}
+	connReadFrom := make(chan SimPacket)
 	simConn := &SimConnection{
-		Log:                s.log,
-		Network:            network,
-		LAddr:              laddr,
-		Closed:             false,
-		PortReleaseMsgChan: s.portReleaseMsgChan,
-		RequestDeadline:    s.requestDeadline,
+		Log:             s.log,
+		Id:              s.Id + "_connection_port" + strconv.Itoa(laddr.Port) + "_iter" + strconv.Itoa(s.portCycles),
+		ReadFrom:        connReadFrom,
+		WriteTo:         s.globalMessageBus,
+		Network:         network,
+		LAddr:           laddr,
+		RequestDeadline: s.requestDeadline,
 	}
-	s.connections[network+laddr.String()] = simConn
-	s.CallBack <- simConn
-	s.log.Debug("Sim connection passed into channel",
-		zap.String("network", network), zap.String("laddr", laddr.String()))
+	tmp := make(chan interface{})
+	s.connectionsHandler <- RequestFromMapHandler{
+		Todo: func() int {
+			s.connections[laddr.Port] = connReadFrom
+			return -1
+		},
+		ReturnBack: tmp,
+	}
+	<-tmp
 	return simConn, nil
 }
 
 func (s *SimConnector) EnableTimestamping(n netprovider.Connection, localhostIface string) error {
-	//TODO does this need more code?
 	if _, ok := n.(*SimConnection); !ok {
 		s.log.Fatal("SimConnector method EnableTimestamping called on a non-simulated connection")
 	}
@@ -171,7 +211,6 @@ func (s *SimConnector) EnableTimestamping(n netprovider.Connection, localhostIfa
 }
 
 func (s *SimConnector) SetDSCP(n netprovider.Connection, dscp uint8) error {
-	//TODO implement me
 	sconn, ok := n.(*SimConnection)
 	if !ok {
 		s.log.Fatal("SimConnector method SetDSCP called on a non-simulated connection")
@@ -192,7 +231,7 @@ func (s *SimConnector) ReadTXTimestamp(n netprovider.Connection) (time.Time, uin
 }
 
 func (s *SimConnector) ListenPacket(network string, address string) (netprovider.Connection, error) {
-	return s.ListenUDP(network, nil)
+	panic("Multiple server goroutines listening on same port not supported by the simulator")
 }
 
 var _ netprovider.ConnProvider = (*SimConnector)(nil)
