@@ -202,15 +202,30 @@ func RunSimulation(
 		for {
 			select {
 			case req := <-timeRequests:
+				log.Debug("Time has been requested", zap.String("by", req.Id))
 				req.ReturnChan <- now
 			case req := <-waitRequests:
+				log.Debug("Wait has been requested", zap.String("by", req.Id))
 				currentlyWaiting = append(currentlyWaiting, req)
 			case req := <-deadlineRequests:
+				log.Debug("Deadline has been requested", zap.String("by", req.Id))
 				deadlines = append(deadlines, req)
 			default:
-				time.Sleep(time.Second) // TODO just for development
+				time.Sleep(time.Second / 10) // TODO just for development
 				//if len(currentlyWaiting) == simutils.NumberOfClocks {
 				if len(currentlyWaiting) > 0 {
+					log.Info("\u001B[41m======== TIME HANDLER ========\u001B[0m", zap.Int("currently waiting", len(currentlyWaiting)))
+					if len(currentlyWaiting) < 4 {
+						continue
+					}
+					//log.Info("Enter 'w' to wait another second for other goroutines or enter 'p' to process the next request in the queue")
+					//scanner.Scan()
+					//if scanner.Text() == "q" {
+					//	os.Exit(0)
+					//}
+					//if scanner.Text() != "p" {
+					//	continue
+					//}
 					minDuration := time.Hour
 					minIndex := 10000000
 					for i, request := range currentlyWaiting {
@@ -252,7 +267,7 @@ func RunSimulation(
 		simServers[i] = tmp
 		log.Debug("\u001B[34mDone setting up server, press Enter to continue\u001B[0m",
 			zap.String("server id", tmp.Id))
-		scanner.Scan()
+		//scanner.Scan()
 	}
 
 	// Relays
@@ -267,7 +282,7 @@ func RunSimulation(
 		simRelays[i] = tmp
 		log.Debug("\u001B[34mDone setting up relay, press Enter to continue\u001B[0m",
 			zap.String("relay id", tmp.Id))
-		scanner.Scan()
+		//scanner.Scan()
 	}
 
 	// Clients
@@ -281,15 +296,16 @@ func RunSimulation(
 		simClients[i] = tmp
 		log.Debug("\u001B[34mDone setting up client, press Enter to continue\u001B[0m",
 			zap.String("client id", tmp.Id))
-		scanner.Scan()
+		//scanner.Scan()
 	}
 
 	log.Info("\u001B[34mSetup completed\u001B[0m")
 
 	log.Info("\u001B[34mPress Enter to run tool\u001B[0m")
-	scanner.Scan()
+	//scanner.Scan()
 	ctxClient := context.Background()
 	lclk := simutils.NewSimulationClock(seed, log, timeRequests, waitRequests)
+	lclk.Id = "tool"
 	var laddr udp.UDPAddr
 	var raddr udp.UDPAddr
 	var laddrSNET snet.UDPAddr
@@ -305,7 +321,6 @@ func RunSimulation(
 	}
 	raddr = udp.UDPAddrFromSnet(&raddrSNET)
 	ntpcs := []*client.SCIONClient{
-		// TODO configure this lclk
 		{Lclk: lclk, ConnectionProvider: simConnector, DSCP: 0, InterleavedMode: false},
 	}
 	ps := []snet.Path{
@@ -320,7 +335,7 @@ func RunSimulation(
 		log.Debug("\u001B[31mMedian Duration measured by tool\u001B[0m",
 			zap.Duration("duration", medianDuration))
 		log.Info("\u001B[34mPress Enter to exit simulation\u001B[0m")
-		scanner.Scan()
+		//scanner.Scan()
 		os.Exit(0)
 	}()
 
@@ -408,7 +423,7 @@ func relaySetUp(i int, relay core.SvcConfig) Relay {
 	}
 	log.Debug("Clock syncs active")
 	log.Debug("\u001B[34mPress Enter to continue to relay start\u001B[0m")
-	scanner.Scan()
+	//scanner.Scan()
 	// Relay starting
 	log.Info("Starting relay", zap.String("id", tmp.Id))
 	localAddr.Host.Port = ntp.ServerPortSCION
@@ -455,7 +470,7 @@ func serverSetUp(i int, simServer core.SvcConfig) Server {
 	}
 	log.Debug("Clock sync active")
 	log.Debug("\u001B[34mPress Enter to continue to server start\u001B[0m")
-	scanner.Scan()
+	//scanner.Scan()
 	// Server starting
 	log.Info("Starting server", zap.String("id", tmp.Id))
 	localAddr.Host.Port = ntp.ServerPortSCION

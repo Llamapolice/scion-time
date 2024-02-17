@@ -94,7 +94,7 @@ func (c SimClock) Sleep(duration time.Duration) {
 	//TODO implement me correctly
 	//duration = time.Second
 	//duration *= 15 // slowed down for debugging/construction purposes
-	c.log.Debug("SimClock sleeping", zap.Duration("duration", duration))
+	c.log.Debug("SimClock sleeping", zap.String("id", c.Id), zap.Duration("duration", duration))
 	//time.Sleep(duration)
 	unblock := make(chan interface{})
 	c.waitRequest <- WaitRequest{Id: c.Id, SleepDuration: duration, Unblock: unblock}
@@ -109,6 +109,7 @@ type SimReferenceClock struct {
 }
 
 func (s *SimReferenceClock) MeasureClockOffset(ctx context.Context, log *zap.Logger) (time.Duration, error) {
+	log.Debug("Measuring SimRefClk offset", zap.String("id", s.Id))
 	return time.Second, nil
 }
 
