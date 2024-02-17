@@ -71,16 +71,16 @@ func RegisterClocks(refClocks, netClocks []client.ReferenceClock) *SyncableClock
 	return &clks
 }
 
-func (c *SyncableClocks) measureOffsetToRefClocks(log *zap.Logger, timeout time.Duration) time.Duration {
+func (c *SyncableClocks) measureOffsetToRefClocks(log *zap.Logger, lclk timebase.LocalClock, timeout time.Duration) time.Duration {
 	log.Debug("Measuring offset to reference clocks", zap.String("clock holder id", c.Id))
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	ctx, cancel := context.WithDeadline(context.Background(), lclk.Now().Add(timeout))
 	defer cancel()
 	c.refClkClient.MeasureClockOffsets(ctx, log, c.refClks, c.refClkOffsets)
 	return timemath.Median(c.refClkOffsets)
 }
 
 func SyncToRefClocks(log *zap.Logger, lclk timebase.LocalClock, syncClks *SyncableClocks) {
-	corr := syncClks.measureOffsetToRefClocks(log, refClkTimeout)
+	corr := syncClks.measureOffsetToRefClocks(log, lclk, refClkTimeout)
 	if corr != 0 {
 		lclk.Step(corr)
 	}
@@ -112,7 +112,7 @@ func RunLocalClockSync(log *zap.Logger, lclk timebase.LocalClock, syncClks *Sync
 	pll := newPLL(log, lclk)
 	for {
 		corrGauge.Set(0)
-		corr := syncClks.measureOffsetToRefClocks(log, refClkTimeout)
+		corr := syncClks.measureOffsetToRefClocks(log, lclk, refClkTimeout)
 		if timemath.Abs(corr) > refClkCutoff {
 			if float64(timemath.Abs(corr)) > maxCorr {
 				corr = time.Duration(float64(timemath.Sign(corr)) * maxCorr)
@@ -125,9 +125,9 @@ func RunLocalClockSync(log *zap.Logger, lclk timebase.LocalClock, syncClks *Sync
 	}
 }
 
-func (c *SyncableClocks) measureOffsetToNetClocks(log *zap.Logger, timeout time.Duration) time.Duration {
+func (c *SyncableClocks) measureOffsetToNetClocks(log *zap.Logger, lclk timebase.LocalClock, timeout time.Duration) time.Duration {
 	log.Debug("\033[47mMeasuring offset to net clocks\033[0m", zap.String("clock holder id", c.Id))
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	ctx, cancel := context.WithDeadline(context.Background(), lclk.Now().Add(timeout))
 	defer cancel()
 	c.netClkClient.MeasureClockOffsets(ctx, log, c.netClks, c.netClkOffsets)
 	log.Debug("\033[47mFinished measuring offset to net clocks\033[0m", zap.String("clock holder id", c.Id))
@@ -164,7 +164,7 @@ func RunGlobalClockSync(log *zap.Logger, lclk timebase.LocalClock, syncClks *Syn
 	pll := newPLL(log, lclk)
 	for {
 		corrGauge.Set(0)
-		corr := syncClks.measureOffsetToNetClocks(log, netClkTimeout)
+		corr := syncClks.measureOffsetToNetClocks(log, lclk, netClkTimeout)
 		if timemath.Abs(corr) > netClkCutoff {
 			if float64(timemath.Abs(corr)) > maxCorr {
 				corr = time.Duration(float64(timemath.Sign(corr)) * maxCorr)
