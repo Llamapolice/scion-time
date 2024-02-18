@@ -182,8 +182,15 @@ func RunSimulation(
 				laddrPort := simConn.LocalAddress.Host.AddrPort()
 				simConnLocalAddress := laddrPort.Addr().WithZone("").Unmap()
 				if simConnLocalAddress == targetAddr {
-					simConn.Input <- msg
-					log.Debug("Passed message on to instance")
+					passOn := func() {
+						simConn.Input <- msg
+						log.Debug("Passed message on to instance", zap.Duration("after", msg.Latency))
+					}
+					waitRequests <- simutils.WaitRequest{
+						Id:            simConn.Id + "_msg",
+						SleepDuration: msg.Latency,
+						Action:        passOn,
+					}
 					continue skip
 				}
 			}
@@ -205,20 +212,21 @@ func RunSimulation(
 				log.Debug("Time has been requested", zap.String("by", req.Id))
 				req.ReturnChan <- now
 			case req := <-waitRequests:
-				log.Debug("Wait has been requested", zap.String("by", req.Id))
+				log.Debug("Wait has been requested", zap.String("by", req.Id), zap.Duration("duration", req.SleepDuration))
 				currentlyWaiting = append(currentlyWaiting, req)
 			case req := <-deadlineRequests:
 				log.Debug("Deadline has been requested", zap.String("by", req.Id))
+				req.RequestTime = now
 				deadlines = append(deadlines, req)
 			default:
 				time.Sleep(time.Second / 10) // TODO just for development
 				//if len(currentlyWaiting) == simutils.NumberOfClocks {
 				if len(currentlyWaiting) > 0 {
 					log.Info("\u001B[41m======== TIME HANDLER ========\u001B[0m", zap.Int("currently waiting", len(currentlyWaiting)))
-					if len(currentlyWaiting) < 4 {
+					if len(currentlyWaiting) < 7 {
 						continue
 					}
-					//log.Info("Enter 'w' to wait another second for other goroutines or enter 'p' to process the next request in the queue")
+					//log.Info("Enter 'w' to wait one loop for other goroutines or enter 'p' to process the next request in the queue")
 					//scanner.Scan()
 					//if scanner.Text() == "q" {
 					//	os.Exit(0)
@@ -241,12 +249,12 @@ func RunSimulation(
 					}
 					now = now.Add(minDuration)
 					log.Debug("Time handler unblocks a sleeper", zap.String("id", shortestRequest.Id))
-					shortestRequest.Unblock <- struct{}{}
+					shortestRequest.Action()
 				}
 				is := make([]int, 0)
 				for i, deadline := range deadlines {
 					if deadline.Deadline.Before(now) {
-						deadline.Unblock <- struct{}{}
+						deadline.Unblock <- now.Sub(deadline.RequestTime)
 						is = append(is, i)
 					}
 				}

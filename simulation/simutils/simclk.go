@@ -96,10 +96,13 @@ func (c SimClock) Sleep(duration time.Duration) {
 	//duration *= 15 // slowed down for debugging/construction purposes
 	c.log.Debug("SimClock sleeping", zap.String("id", c.Id), zap.Duration("duration", duration))
 	//time.Sleep(duration)
-	unblock := make(chan interface{})
-	c.waitRequest <- WaitRequest{Id: c.Id, SleepDuration: duration, Unblock: unblock}
-	<-unblock
-	close(unblock)
+	unblockChan := make(chan struct{})
+	unblock := func() {
+		unblockChan <- struct{}{}
+	}
+	c.waitRequest <- WaitRequest{Id: c.Id, SleepDuration: duration, Action: unblock}
+	<-unblockChan
+	close(unblockChan)
 }
 
 var _ timebase.LocalClock = (*SimClock)(nil)

@@ -22,6 +22,7 @@ type SimPacket struct {
 	B          []byte
 	TargetAddr netip.AddrPort
 	SourceAddr netip.AddrPort
+	Latency    time.Duration
 }
 
 type TimeRequest struct {
@@ -32,13 +33,15 @@ type TimeRequest struct {
 type WaitRequest struct {
 	Id            string
 	SleepDuration time.Duration
-	Unblock       chan interface{}
+	Action        func()
+	//Unblock       chan interface{}
 }
 
 type DeadlineRequest struct {
-	Id       string
-	Deadline time.Time
-	Unblock  chan interface{}
+	Id          string
+	Deadline    time.Time
+	Unblock     chan time.Duration
+	RequestTime time.Time
 }
 
 // RequestFromMapHandler is used to circumvent concurrent read/write errors on the connections map in SimConnector.

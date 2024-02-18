@@ -183,13 +183,15 @@ func (s *SimConnector) ListenUDP(network string, laddr *net.UDPAddr) (netprovide
 	}
 	connReadFrom := make(chan SimPacket)
 	simConn := &SimConnection{
-		Log:             s.log,
-		Id:              s.Id + "_connection_port" + strconv.Itoa(laddr.Port) + "_iter" + strconv.Itoa(s.portCycles),
-		ReadFrom:        connReadFrom,
-		WriteTo:         s.globalMessageBus,
-		Network:         network,
-		LAddr:           laddr,
-		RequestDeadline: s.requestDeadline,
+		Log:                s.log,
+		Id:                 s.Id + "_connection_port" + strconv.Itoa(laddr.Port) + "_iter" + strconv.Itoa(s.portCycles),
+		ReadFrom:           connReadFrom,
+		WriteTo:            s.globalMessageBus,
+		Latency:            2 * time.Millisecond, // TODO have latency not hardcoded, maybe from a config?
+		Network:            network,
+		LAddr:              laddr,
+		ConnectionsHandler: s.connectionsHandler,
+		RequestDeadline:    s.requestDeadline,
 	}
 	tmp := make(chan interface{})
 	s.connectionsHandler <- RequestFromMapHandler{

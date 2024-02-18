@@ -13,6 +13,7 @@ type SimConnection struct {
 	Id       string // maybe change to Int but start with string for easier debugging
 	ReadFrom chan SimPacket
 	WriteTo  chan SimPacket
+	Latency  time.Duration
 
 	Deadline time.Time
 	// Following are temporary, might be nice for debugging, but might change
@@ -33,6 +34,7 @@ func (S *SimConnection) Close() error {
 	}
 	S.Closed = true
 	tmp := make(chan interface{})
+	S.Log.Debug("Removing simconnection from map", zap.String("id", S.Id))
 	S.ConnectionsHandler <- RequestFromMapHandler{
 		Todo: func() int {
 			return S.LAddr.Port
@@ -89,7 +91,7 @@ func (S *SimConnection) WriteToUDPAddrPort(b []byte, addr netip.AddrPort) (int, 
 	if addr.Port() == 0 {
 		S.Log.Fatal("Writing to port 0 is not possible")
 	}
-	S.WriteTo <- SimPacket{B: b, TargetAddr: addr, SourceAddr: S.LAddr.AddrPort()}
+	S.WriteTo <- SimPacket{B: b, TargetAddr: addr, SourceAddr: S.LAddr.AddrPort(), Latency: S.Latency}
 	return len(b), nil
 }
 
@@ -97,11 +99,10 @@ func (S *SimConnection) SetDeadline(t time.Time) error {
 	S.Log.Debug("Connection getting a deadline",
 		zap.String("conn id", S.Id), zap.Time("deadline", t))
 	S.Deadline = t
-	sleepDuration := time.Until(t)
 	go func() {
-		unblock := make(chan interface{})
+		unblock := make(chan time.Duration)
 		S.RequestDeadline <- DeadlineRequest{Id: S.Id, Deadline: t, Unblock: unblock}
-		<-unblock
+		sleepDuration := <-unblock
 		if S.Closed {
 			S.Log.Debug("Already closed connection timed out",
 				zap.String("conn id", S.Id))
