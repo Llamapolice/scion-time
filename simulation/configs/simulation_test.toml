@@ -29,10 +29,15 @@ ntske_server_name = "localhost"
 dscp = 63
 
 
-[[clients]]
-local_address = "1-ff00:0:111,10.1.1.13"
-daemon_address = "" # 10.1.1.11:30255"
-
-ntp_reference_clocks = ["1-ff00:0:111,10.1.1.12:10123"]
-
-dscp = 63
+#[[clients]]
+#local_address = "1-ff00:0:111,10.1.1.13"
+#daemon_address = "simDaemonClient13" # 10.1.1.11:30255"
+#
+#ntp_reference_clocks = ["1-ff00:0:111,10.1.1.12:10123"]
+#
+#dscp = 63
+#
+#
+#[[tools]]
+#local_address = "1-ff00:0:111,10.1.1.20"
+#remote_address = "1-ff00:0:111,10.1.1.11:10123"

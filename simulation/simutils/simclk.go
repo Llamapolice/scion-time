@@ -24,14 +24,10 @@ type SimClock struct {
 
 var NumberOfClocks int
 
-func NewSimulationClock(
-	seed int64,
-	log *zap.Logger,
-	timeRequest chan TimeRequest,
-	waitRequest chan WaitRequest,
-) *SimClock {
+func NewSimulationClock(log *zap.Logger, id string, seed int64, timeRequest chan TimeRequest, waitRequest chan WaitRequest) *SimClock {
 	NumberOfClocks += 1
 	return &SimClock{
+		Id:          id + "_clk",
 		seed:        seed,
 		log:         log,
 		counter:     0,

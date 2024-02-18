@@ -27,6 +27,7 @@ type SimConfigFile struct {
 	Servers []core.SvcConfig `toml:"servers"`
 	Relays  []core.SvcConfig `toml:"relays"`
 	Clients []core.SvcConfig `toml:"clients"`
+	Tools   []core.SvcConfig `toml:"tools"`
 }
 
 type Instance struct {
@@ -147,10 +148,6 @@ func RunSimulation(
 	lcrypt := simutils.NewSimCrypto(seed, log)
 	cryptocore.RegisterCrypto(lcrypt)
 
-	var tmpaddr snet.UDPAddr
-	_ = tmpaddr.Set("1-ff00:0:111,10.1.1.20")
-	simConnector := simutils.NewSimConnector(log, "tool", &tmpaddr, receiver, deadlineRequests)
-	simConnectors = append(simConnectors, simConnector)
 	//netcore.RegisterNetProvider(simConnector)
 
 	// Some set up to build the simulated network and start instances
@@ -223,7 +220,7 @@ func RunSimulation(
 				//if len(currentlyWaiting) == simutils.NumberOfClocks {
 				if len(currentlyWaiting) > 0 {
 					log.Info("\u001B[41m======== TIME HANDLER ========\u001B[0m", zap.Int("currently waiting", len(currentlyWaiting)))
-					if len(currentlyWaiting) < 7 {
+					if len(currentlyWaiting) < 5 { // TODO how to adjust this number dynamically?
 						continue
 					}
 					//log.Info("Enter 'w' to wait one loop for other goroutines or enter 'p' to process the next request in the queue")
@@ -309,43 +306,11 @@ func RunSimulation(
 
 	log.Info("\u001B[34mSetup completed\u001B[0m")
 
-	log.Info("\u001B[34mPress Enter to run tool\u001B[0m")
-	//scanner.Scan()
-	ctxClient := context.Background()
-	lclk := simutils.NewSimulationClock(seed, log, timeRequests, waitRequests)
-	lclk.Id = "tool"
-	var laddr udp.UDPAddr
-	var raddr udp.UDPAddr
-	var laddrSNET snet.UDPAddr
-	var raddrSNET snet.UDPAddr
-	err := laddrSNET.Set("1-ff00:0:111,10.1.1.12")
-	if err != nil {
-		log.Fatal("Tool local address failed to parse")
-	}
-	laddr = udp.UDPAddrFromSnet(&laddrSNET)
-	err = raddrSNET.Set("1-ff00:0:111,10.1.1.11:10123")
-	if err != nil {
-		log.Fatal("Tool remote address failed to parse")
-	}
-	raddr = udp.UDPAddrFromSnet(&raddrSNET)
-	ntpcs := []*client.SCIONClient{
-		{Lclk: lclk, ConnectionProvider: simConnector, DSCP: 0, InterleavedMode: false},
-	}
-	ps := []snet.Path{
-		path.Path{Src: laddrSNET.IA, Dst: raddrSNET.IA, DataplanePath: path.Empty{}},
-	}
-
-	go func() {
-		medianDuration, err := client.MeasureClockOffsetSCION(ctxClient, log, ntpcs, laddr, raddr, ps)
-		if err != nil {
-			log.Fatal("Tool had an error", zap.Error(err))
-		}
-		log.Debug("\u001B[31mMedian Duration measured by tool\u001B[0m",
-			zap.Duration("duration", medianDuration))
-		log.Info("\u001B[34mPress Enter to exit simulation\u001B[0m")
+	for i, tool := range cfg.Tools {
+		log.Info("\u001B[34mPress Enter to run tool\u001B[0m", zap.Int("tool", i))
 		//scanner.Scan()
-		os.Exit(0)
-	}()
+		runTool(i, tool)
+	}
 
 	// Main loop of simulation
 	for condition := true; condition; {
@@ -357,13 +322,56 @@ func RunSimulation(
 	select {}
 }
 
+func runTool(i int, tool core.SvcConfig) {
+	id := "tool_" + strconv.Itoa(i)
+	ctxClient := context.Background()
+	lclk := simutils.NewSimulationClock(log, id, int64(i), timeRequests, waitRequests)
+	var laddr udp.UDPAddr
+	var raddr udp.UDPAddr
+	var laddrSNET snet.UDPAddr
+	var raddrSNET snet.UDPAddr
+	err := laddrSNET.Set(tool.LocalAddr)
+	if err != nil {
+		log.Fatal("Tool local address failed to parse")
+	}
+	laddr = udp.UDPAddrFromSnet(&laddrSNET)
+	err = raddrSNET.Set(tool.RemoteAddr)
+	if err != nil {
+		log.Fatal("Tool remote address failed to parse")
+	}
+	raddr = udp.UDPAddrFromSnet(&raddrSNET)
+
+	simConnector := simutils.NewSimConnector(log, id, &laddrSNET, receiver, deadlineRequests)
+	simConnectors = append(simConnectors, simConnector)
+
+	ntpcs := []*client.SCIONClient{
+		{Lclk: lclk, ConnectionProvider: simConnector, DSCP: 0, InterleavedMode: false},
+	}
+	ps := []snet.Path{
+		path.Path{Src: laddrSNET.IA, Dst: raddrSNET.IA, DataplanePath: path.Empty{}},
+	}
+
+	go func() {
+		log.Debug("Tool setup complete, running offset measurement now", zap.String("id", id))
+		medianDuration, err := client.MeasureClockOffsetSCION(ctxClient, log, ntpcs, laddr, raddr, ps)
+		if err != nil {
+			log.Fatal("Tool had an error", zap.Error(err))
+		}
+		log.Debug("\u001B[31mMedian Duration measured by tool\u001B[0m",
+			zap.Duration("duration", medianDuration))
+		//log.Info("\u001B[34mPress Enter to exit simulation\u001B[0m")
+		////scanner.Scan()
+		//os.Exit(0)
+	}()
+}
+
 func clientSetUp(i int, clnt core.SvcConfig) Client {
 	log.Debug("Setting up client", zap.Int("client", i))
 	tmp := newClient(receiver)
 	tmp.Id += strconv.Itoa(i)
 
 	laddr := core.LocalAddress(clnt)
-	simClk := simutils.NewSimulationClock(int64(i), log, timeRequests, waitRequests)
+	simClk := simutils.NewSimulationClock(log, tmp.Id, int64(i), timeRequests, waitRequests)
 	tmp.LocalClk = simClk
 	simNet := simutils.NewSimConnector(log, tmp.Id, laddr, receiver, deadlineRequests)
 	simConnectors = append(simConnectors, simNet)
@@ -390,7 +398,6 @@ func clientSetUp(i int, clnt core.SvcConfig) Client {
 	}
 
 	if len(refClocks) != 0 {
-		simClk.Id = tmp.Id
 		sync.SyncToRefClocks(log, simClk, syncClks)
 		go sync.RunLocalClockSync(log, simClk, syncClks)
 	}
@@ -407,14 +414,13 @@ func relaySetUp(i int, relay core.SvcConfig) Relay {
 	tmp.Id = tmp.Id + strconv.Itoa(i)
 
 	localAddr := core.LocalAddress(relay)
-	simClk := simutils.NewSimulationClock(int64(i), log, timeRequests, waitRequests)
+	simClk := simutils.NewSimulationClock(log, tmp.Id, int64(i), timeRequests, waitRequests)
 	tmp.LocalClk = simClk
 	simNet := simutils.NewSimConnector(log, tmp.Id, localAddr, receiver, deadlineRequests)
 	simConnectors = append(simConnectors, simNet)
 
 	// Clock Sync
 	log.Debug("Starting clock sync")
-	simClk.Id = tmp.Id
 	localAddr.Host.Port = 0
 	refClocks, netClocks := core.CreateClocks(relay, localAddr, simClk, simNet, log)
 	syncClks := sync.RegisterClocks(refClocks, netClocks)
@@ -451,14 +457,13 @@ func serverSetUp(i int, simServer core.SvcConfig) Server {
 	tmp.Id = tmp.Id + strconv.Itoa(i)
 
 	localAddr := core.LocalAddress(simServer)
-	simClk := simutils.NewSimulationClock(int64(i), log, timeRequests, waitRequests)
+	simClk := simutils.NewSimulationClock(log, tmp.Id, int64(i), timeRequests, waitRequests)
 	tmp.LocalClk = simClk
 	simNet := simutils.NewSimConnector(log, tmp.Id, localAddr, receiver, deadlineRequests)
 	simConnectors = append(simConnectors, simNet)
 
 	// Clock Sync
 	log.Debug("Starting clock sync")
-	simClk.Id = tmp.Id
 	localAddr.Host.Port = 0
 	refClocks, netClocks := core.CreateClocks(simServer, localAddr, simClk, simNet, log)
 	syncClks := sync.RegisterClocks(refClocks, netClocks)
