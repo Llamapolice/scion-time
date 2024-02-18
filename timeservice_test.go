@@ -54,8 +54,9 @@ func TestTimeserviceNTSChrony(t *testing.T) {
 	laddr := localAddrSnet.Host
 	raddr := remoteAddrSnet.Host
 	c := &client.IPClient{
-		Lclk:            lclk,
-		InterleavedMode: true,
+		Lclk:               lclk,
+		ConnectionProvider: lnet,
+		InterleavedMode:    true,
 	}
 
 	ntskeHost, ntskePort, err := net.SplitHostPort(ntskeServer)
