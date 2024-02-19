@@ -168,10 +168,11 @@ func NewSimConnector(
 	}
 }
 
-func (s *SimConnector) ListenUDP(network string, laddr *net.UDPAddr) (netprovider.Connection, error) {
+func (s *SimConnector) ListenUDP(network string, laddr_orig *net.UDPAddr) (netprovider.Connection, error) {
 	s.log.Info("Opening a sim connection")
+	laddr := *laddr_orig
 	if laddr.Port == 0 {
-		laddr.Port = s.port // TODO is modifying the laddr here an issue?
+		laddr.Port = s.port
 		s.port += 1
 		if s.port == 60000 {
 			s.log.Warn("Created 50000 connections from one connector", zap.String("connector id", s.Id))
@@ -189,7 +190,7 @@ func (s *SimConnector) ListenUDP(network string, laddr *net.UDPAddr) (netprovide
 		WriteTo:            s.globalMessageBus,
 		Latency:            2 * time.Millisecond, // TODO have latency not hardcoded, maybe from a config?
 		Network:            network,
-		LAddr:              laddr,
+		LAddr:              &laddr,
 		ConnectionsHandler: s.connectionsHandler,
 		RequestDeadline:    s.requestDeadline,
 	}

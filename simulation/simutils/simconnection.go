@@ -87,7 +87,7 @@ func (S *SimConnection) ReadMsgUDPAddrPort(buf []byte, oob []byte) (
 
 func (S *SimConnection) WriteToUDPAddrPort(b []byte, addr netip.AddrPort) (int, error) {
 	S.Log.Debug("Message to be written", zap.String("connection id", S.Id), zap.Binary("msg", b),
-		zap.String("target addr", addr.String()), zap.String("originating addr", S.LAddr.AddrPort().String()))
+		zap.Stringer("target addr", addr), zap.Stringer("originating addr", S.LAddr.AddrPort()))
 	if addr.Port() == 0 {
 		S.Log.Fatal("Writing to port 0 is not possible")
 	}

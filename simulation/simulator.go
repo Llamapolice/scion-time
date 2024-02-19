@@ -138,12 +138,8 @@ func RunSimulation(
 	core.LoadConfig(&cfg, configFile, log)
 
 	// Set up file package vars
-	receiver = make(chan simutils.SimPacket)
 	simConnectors = make([]*simutils.SimConnector, 0, len(cfg.Clients)+len(cfg.Relays)+len(cfg.Servers)+1)
 	scanner = bufio.NewScanner(os.Stdin)
-	timeRequests = make(chan simutils.TimeRequest)
-	waitRequests = make(chan simutils.WaitRequest)
-	deadlineRequests = make(chan simutils.DeadlineRequest)
 
 	lcrypt := simutils.NewSimCrypto(seed, log)
 	cryptocore.RegisterCrypto(lcrypt)
@@ -161,6 +157,7 @@ func RunSimulation(
 	// Bare-bones message handler to pass messages around
 	go func() {
 		log.Info("\u001B[34mMessage handler started\u001B[0m")
+		receiver = make(chan simutils.SimPacket)
 	skip:
 		for msg := range receiver {
 			log.Debug(
@@ -169,19 +166,22 @@ func RunSimulation(
 				zap.String("target", msg.TargetAddr.String()),
 				zap.String("source", msg.SourceAddr.String()),
 			)
-			//receivingInstance, exists := receivingInstances[msg.TargetAddr.String()]
-			//if exists {
-			//	receivingInstance <- msg
-			//	log.Debug("Passed message on to instance")
-			//} else {
 			targetAddr := msg.TargetAddr.Addr().WithZone("").Unmap()
 			for _, simConn := range simConnectors {
 				laddrPort := simConn.LocalAddress.Host.AddrPort()
 				simConnLocalAddress := laddrPort.Addr().WithZone("").Unmap()
 				if simConnLocalAddress == targetAddr {
+					// necessary, otherwise the function will use the current simConn and msg during its execution instead of creation (what we want)
+					tmp := *simConn
+					tmpMsg := msg
 					passOn := func() {
-						simConn.Input <- msg
-						log.Debug("Passed message on to instance", zap.Duration("after", msg.Latency))
+						tmp.Input <- tmpMsg
+						log.Debug(
+							"Passed message on to instance",
+							zap.String("receiving connector id", tmp.Id),
+							zap.Stringer("source addr", tmpMsg.SourceAddr),
+							zap.Duration("after", tmpMsg.Latency),
+						)
 					}
 					waitRequests <- simutils.WaitRequest{
 						Id:            simConn.Id + "_msg",
@@ -197,12 +197,18 @@ func RunSimulation(
 		log.Info("\u001B[34mMessage handler terminating\u001B[0m")
 	}()
 
+	for receiver == nil {
+	} // Wait for message handler to be ready
+
 	// Sketch for a ground time provider
 	go func() {
 		log.Info("Time handler started")
 		now := time.Unix(10000, 0)
 		currentlyWaiting := make([]simutils.WaitRequest, 0, maxNumberOfInstances)
 		deadlines := make([]simutils.DeadlineRequest, 0, maxNumberOfInstances*3) // 3 connections max per instance sounds reasonable?
+		timeRequests = make(chan simutils.TimeRequest)
+		waitRequests = make(chan simutils.WaitRequest)
+		deadlineRequests = make(chan simutils.DeadlineRequest)
 		for {
 			select {
 			case req := <-timeRequests:
@@ -263,6 +269,9 @@ func RunSimulation(
 			}
 		}
 	}()
+
+	for deadlineRequests == nil {
+	} // Wait for time handler to be ready
 
 	log.Info("\u001B[34mSetting up Servers\u001B[0m", zap.Int("amount", len(cfg.Servers)))
 	simServers := make([]Server, len(cfg.Servers))

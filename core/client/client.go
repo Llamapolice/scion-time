@@ -127,7 +127,9 @@ func MeasureClockOffsetSCION(ctx context.Context, log *zap.Logger,
 			var off time.Duration
 			var nerr, n int
 			log.Debug("measuring clock offset",
-				zap.Stringer("to", remoteAddr.IA),
+				zap.Stringer("to IA", remoteAddr.IA),
+				zap.Stringer("to", remoteAddr),
+				zap.Stringer("from", localAddr),
 				zap.Object("via", scion.PathMarshaler{Path: p}),
 			)
 			if ntpc.InterleavedMode {
