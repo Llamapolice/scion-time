@@ -5,6 +5,7 @@ import (
 	"go.uber.org/zap"
 	"net"
 	"net/netip"
+	"sync/atomic"
 	"time"
 )
 
@@ -24,6 +25,7 @@ type SimConnection struct {
 	LAddr              *net.UDPAddr
 	ConnectionsHandler chan RequestFromMapHandler
 	RequestDeadline    chan DeadlineRequest
+	WaitCounter        *atomic.Int32
 }
 
 func (S *SimConnection) Close() error {

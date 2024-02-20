@@ -17,6 +17,7 @@ import (
 	"go.uber.org/zap"
 	"os"
 	"strconv"
+	"sync/atomic"
 	"time"
 )
 
@@ -113,6 +114,7 @@ var (
 	log           *zap.Logger
 	receiver      chan simutils.SimPacket
 	simConnectors []*simutils.SimConnector
+	safeCounter   *atomic.Int32
 	//handleConnectionSetup func(
 	//	id string,
 	//	receiveFromInstance chan simutils.SimPacket,
@@ -138,8 +140,10 @@ func RunSimulation(
 	core.LoadConfig(&cfg, configFile, log)
 
 	// Set up file package vars
-	simConnectors = make([]*simutils.SimConnector, 0, len(cfg.Clients)+len(cfg.Relays)+len(cfg.Servers)+1)
+	simConnectors = make([]*simutils.SimConnector, 0, len(cfg.Clients)+len(cfg.Relays)+len(cfg.Servers)+len(cfg.Tools))
 	scanner = bufio.NewScanner(os.Stdin)
+	safeCounter = &atomic.Int32{}
+	checkpoint := make(chan struct{})
 
 	lcrypt := simutils.NewSimCrypto(seed, log)
 	cryptocore.RegisterCrypto(lcrypt)
@@ -224,19 +228,23 @@ func RunSimulation(
 			default:
 				time.Sleep(time.Second / 10) // TODO just for development
 				//if len(currentlyWaiting) == simutils.NumberOfClocks {
-				if len(currentlyWaiting) > 0 {
+				if len(currentlyWaiting) >= 0 {
 					log.Info("\u001B[41m======== TIME HANDLER ========\u001B[0m", zap.Int("currently waiting", len(currentlyWaiting)))
-					if len(currentlyWaiting) < 5 { // TODO how to adjust this number dynamically?
+					if len(currentlyWaiting) < int(safeCounter.Load()) { // TODO how to adjust this number dynamically?
 						continue
 					}
-					//log.Info("Enter 'w' to wait one loop for other goroutines or enter 'p' to process the next request in the queue")
-					//scanner.Scan()
-					//if scanner.Text() == "q" {
-					//	os.Exit(0)
-					//}
-					//if scanner.Text() != "p" {
-					//	continue
-					//}
+					log.Info("Enter 'w' to wait one loop for other goroutines or enter 'p' to process the next request in the queue")
+					scanner.Scan()
+					if scanner.Text() == "q" {
+						os.Exit(0)
+					}
+					if scanner.Text() == "c" {
+						checkpoint <- struct{}{}
+					}
+
+					if scanner.Text() != "p" {
+						continue
+					}
 					minDuration := time.Hour
 					minIndex := 10000000
 					for i, request := range currentlyWaiting {
@@ -273,14 +281,16 @@ func RunSimulation(
 	for deadlineRequests == nil {
 	} // Wait for time handler to be ready
 
-	log.Info("\u001B[34mSetting up Servers\u001B[0m", zap.Int("amount", len(cfg.Servers)))
+	log.Info("\u001B[34mSetting up Servers, press c to time handler to start\u001B[0m", zap.Int("amount", len(cfg.Servers)))
 	simServers := make([]Server, len(cfg.Servers))
+	<-checkpoint
 
 	for i, simServer := range cfg.Servers {
 		tmp := serverSetUp(i, simServer)
 		simServers[i] = tmp
-		log.Debug("\u001B[34mDone setting up server, press Enter to continue\u001B[0m",
+		log.Debug("\u001B[34mDone setting up server, press c to time handler to continue\u001B[0m",
 			zap.String("server id", tmp.Id))
+		<-checkpoint
 		//scanner.Scan()
 	}
 
@@ -480,12 +490,14 @@ func serverSetUp(i int, simServer core.SvcConfig) Server {
 	tmp.SyncClks = syncClks
 	if len(refClocks) != 0 {
 		log.Debug("Found reference clocks", zap.Int("amount", len(refClocks)))
+		safeCounter.Add(int32(len(refClocks)))
 		sync.SyncToRefClocks(log, simClk, syncClks)
 		go sync.RunLocalClockSync(log, simClk, syncClks)
 	}
 
 	if len(netClocks) != 0 {
 		log.Debug("Found net clocks", zap.Int("amount", len(netClocks)))
+		safeCounter.Add(int32(len(netClocks)))
 		go sync.RunGlobalClockSync(log, simClk, syncClks)
 		//tmpSyncConn := handleConnectionSetup(tmp.Id+"_netSync", tmp.ReceiveFromInstance, nil)
 		//log.Debug("Received sync connection", zap.String("local addr", tmpSyncConn.LAddr.String()))
