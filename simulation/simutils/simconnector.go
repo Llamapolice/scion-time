@@ -14,6 +14,7 @@ import (
 	"net"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 )
 
@@ -81,7 +82,8 @@ type SimConnector struct {
 	Id           string
 	LocalAddress *snet.UDPAddr
 	// This channel is where all messages to this SimConnector's corresponding IP address are sent
-	Input chan SimPacket
+	Input        chan SimPacket
+	totalWaiters *atomic.Int32
 
 	// Every SimConnection created by this SimConnector will apply this function to messages before passing it to the handler
 	ModifyOutgoing func(packet *SimPacket)
@@ -122,7 +124,7 @@ func (s *SimConnector) NewDaemonConnector(ctx context.Context, daemonAddr string
 	}
 }
 
-func NewSimConnector(log *zap.Logger, id string, laddr *snet.UDPAddr, globalMessageBus chan SimPacket, requestDeadline chan DeadlineRequest, ModifyIncomingMsg, ModifyOutgoingMsg func(packet *SimPacket), DefineLatency func(laddr *net.UDPAddr) time.Duration) *SimConnector {
+func NewSimConnector(log *zap.Logger, id string, laddr *snet.UDPAddr, globalMessageBus chan SimPacket, requestDeadline chan DeadlineRequest, ModifyIncomingMsg, ModifyOutgoingMsg func(packet *SimPacket), DefineLatency func(laddr *net.UDPAddr) time.Duration, totalWaiters *atomic.Int32) *SimConnector {
 	id = id + "_SimConnector"
 	log.Info("Creating a new sim connector", zap.String("id", id), zap.String("laddr", laddr.String()))
 
@@ -133,6 +135,7 @@ func NewSimConnector(log *zap.Logger, id string, laddr *snet.UDPAddr, globalMess
 		for request := range connectionsHandlerInput {
 			port := request.Todo()
 			if port >= 0 {
+				totalWaiters.Add(-1)
 				delete(connections, port)
 			}
 			request.ReturnBack <- port
@@ -160,6 +163,7 @@ func NewSimConnector(log *zap.Logger, id string, laddr *snet.UDPAddr, globalMess
 		Id:                 id,
 		LocalAddress:       laddr,
 		Input:              input,
+		totalWaiters:       totalWaiters,
 		ModifyIncoming:     ModifyIncomingMsg,
 		ModifyOutgoing:     ModifyOutgoingMsg,
 		DefineLatency:      DefineLatency,
@@ -177,6 +181,7 @@ func (s *SimConnector) ListenUDP(network string, laddr_orig *net.UDPAddr) (netpr
 	s.log.Info("Opening a sim connection")
 	laddr := *laddr_orig
 	if laddr.Port == 0 {
+		s.totalWaiters.Add(1)
 		laddr.Port = s.port
 		s.port += 1
 		if s.port == 60000 {

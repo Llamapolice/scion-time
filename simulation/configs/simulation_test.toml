@@ -2,7 +2,7 @@
 local_address = "1-ff00:0:111,10.1.1.11"
 daemon_address =  "simDaemon11" # empty for now, was "10.1.1.11:30255"
 
-mbg_reference_clocks = ["simRefClk11"]
+mbg_reference_clocks = []#"simRefClk11"]
 ntp_reference_clocks = []
 scion_peers = ["1-ff00:0:111,10.1.1.12:10123"]
 auth_modes = [] #"spao"]
