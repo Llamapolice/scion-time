@@ -83,6 +83,13 @@ type SimConnector struct {
 	// This channel is where all messages to this SimConnector's corresponding IP address are sent
 	Input chan SimPacket
 
+	// Every SimConnection created by this SimConnector will apply this function to messages before passing it to the handler
+	ModifyOutgoing func(packet *SimPacket)
+	// Every message received by this SimConnector gets this function applied to it before entering the local message handler logic
+	ModifyIncoming func(packet *SimPacket)
+	// This function provides the baseline latency to a created SimConnection
+	DefineLatency func(laddr *net.UDPAddr) time.Duration
+
 	log *zap.Logger
 	// This channel is where all spawned SimConnection write to
 	globalMessageBus chan SimPacket
@@ -115,13 +122,7 @@ func (s *SimConnector) NewDaemonConnector(ctx context.Context, daemonAddr string
 	}
 }
 
-func NewSimConnector(
-	log *zap.Logger,
-	id string,
-	laddr *snet.UDPAddr,
-	globalMessageBus chan SimPacket,
-	requestDeadline chan DeadlineRequest,
-) *SimConnector {
+func NewSimConnector(log *zap.Logger, id string, laddr *snet.UDPAddr, globalMessageBus chan SimPacket, requestDeadline chan DeadlineRequest, ModifyIncomingMsg, ModifyOutgoingMsg func(packet *SimPacket), DefineLatency func(laddr *net.UDPAddr) time.Duration) *SimConnector {
 	id = id + "_SimConnector"
 	log.Info("Creating a new sim connector", zap.String("id", id), zap.String("laddr", laddr.String()))
 
@@ -143,6 +144,7 @@ func NewSimConnector(
 	go func() {
 		// This goroutine distributes incoming messages to the corresponding connection based on ports
 		for msg := range input {
+			ModifyIncomingMsg(&msg)
 			port := int(msg.TargetAddr.Port())
 			log.Debug("Message received", zap.String("connector id", id), zap.Int("target port", port))
 			conn, ok := connections[port]
@@ -158,6 +160,9 @@ func NewSimConnector(
 		Id:                 id,
 		LocalAddress:       laddr,
 		Input:              input,
+		ModifyIncoming:     ModifyIncomingMsg,
+		ModifyOutgoing:     ModifyOutgoingMsg,
+		DefineLatency:      DefineLatency,
 		log:                log,
 		globalMessageBus:   globalMessageBus,
 		port:               10000,
@@ -188,7 +193,8 @@ func (s *SimConnector) ListenUDP(network string, laddr_orig *net.UDPAddr) (netpr
 		Id:                 s.Id + "_connection_port" + strconv.Itoa(laddr.Port) + "_iter" + strconv.Itoa(s.portCycles),
 		ReadFrom:           connReadFrom,
 		WriteTo:            s.globalMessageBus,
-		Latency:            2 * time.Millisecond, // TODO have latency not hardcoded, maybe from a config?
+		Latency:            s.DefineLatency(&laddr),
+		ModifyOutgoing:     s.ModifyOutgoing,
 		Network:            network,
 		LAddr:              &laddr,
 		ConnectionsHandler: s.connectionsHandler,

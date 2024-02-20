@@ -15,6 +15,7 @@ import (
 	"github.com/scionproto/scion/pkg/snet"
 	"github.com/scionproto/scion/pkg/snet/path"
 	"go.uber.org/zap"
+	net2 "net"
 	"os"
 	"strconv"
 	"sync/atomic"
@@ -22,6 +23,10 @@ import (
 )
 
 const maxNumberOfInstances = 30
+
+// FAKE CONSTANTS
+var NOPModifyMsg = func(_ *simutils.SimPacket) {}
+var DefineDefaultLatency = func(_ *net2.UDPAddr) time.Duration { return 2 * time.Millisecond }
 
 type SimConfigFile struct {
 	// TODO, WIP
@@ -111,10 +116,11 @@ func newRelay(receiver chan simutils.SimPacket) (r Relay) {
 }
 
 var (
-	log           *zap.Logger
-	receiver      chan simutils.SimPacket
-	simConnectors []*simutils.SimConnector
-	safeCounter   *atomic.Int32
+	log             *zap.Logger
+	receiver        chan simutils.SimPacket
+	globalModifyMsg func(packet simutils.SimPacket) simutils.SimPacket
+	simConnectors   []*simutils.SimConnector
+	safeCounter     *atomic.Int32
 	//handleConnectionSetup func(
 	//	id string,
 	//	receiveFromInstance chan simutils.SimPacket,
@@ -144,6 +150,10 @@ func RunSimulation(
 	scanner = bufio.NewScanner(os.Stdin)
 	safeCounter = &atomic.Int32{}
 	checkpoint := make(chan struct{})
+	// Standard NOP packet modification in message handler
+	globalModifyMsg = func(packet simutils.SimPacket) simutils.SimPacket {
+		return packet
+	}
 
 	lcrypt := simutils.NewSimCrypto(seed, log)
 	cryptocore.RegisterCrypto(lcrypt)
@@ -177,7 +187,7 @@ func RunSimulation(
 				if simConnLocalAddress == targetAddr {
 					// necessary, otherwise the function will use the current simConn and msg during its execution instead of creation (what we want)
 					tmp := *simConn
-					tmpMsg := msg
+					tmpMsg := globalModifyMsg(msg)
 					passOn := func() {
 						tmp.Input <- tmpMsg
 						log.Debug(
@@ -360,7 +370,16 @@ func runTool(i int, tool core.SvcConfig) {
 	}
 	raddr = udp.UDPAddrFromSnet(&raddrSNET)
 
-	simConnector := simutils.NewSimConnector(log, id, &laddrSNET, receiver, deadlineRequests)
+	simConnector := simutils.NewSimConnector(
+		log,
+		id,
+		&laddrSNET,
+		receiver,
+		deadlineRequests,
+		NOPModifyMsg,
+		NOPModifyMsg,
+		DefineDefaultLatency,
+	)
 	simConnectors = append(simConnectors, simConnector)
 
 	ntpcs := []*client.SCIONClient{
@@ -392,7 +411,16 @@ func clientSetUp(i int, clnt core.SvcConfig) Client {
 	laddr := core.LocalAddress(clnt)
 	simClk := simutils.NewSimulationClock(log, tmp.Id, int64(i), timeRequests, waitRequests)
 	tmp.LocalClk = simClk
-	simNet := simutils.NewSimConnector(log, tmp.Id, laddr, receiver, deadlineRequests)
+	simNet := simutils.NewSimConnector(
+		log,
+		tmp.Id,
+		laddr,
+		receiver,
+		deadlineRequests,
+		NOPModifyMsg,
+		NOPModifyMsg,
+		DefineDefaultLatency,
+	)
 	simConnectors = append(simConnectors, simNet)
 
 	laddr.Host.Port = 0
@@ -435,7 +463,16 @@ func relaySetUp(i int, relay core.SvcConfig) Relay {
 	localAddr := core.LocalAddress(relay)
 	simClk := simutils.NewSimulationClock(log, tmp.Id, int64(i), timeRequests, waitRequests)
 	tmp.LocalClk = simClk
-	simNet := simutils.NewSimConnector(log, tmp.Id, localAddr, receiver, deadlineRequests)
+	simNet := simutils.NewSimConnector(
+		log,
+		tmp.Id,
+		localAddr,
+		receiver,
+		deadlineRequests,
+		NOPModifyMsg,
+		NOPModifyMsg,
+		DefineDefaultLatency,
+	)
 	simConnectors = append(simConnectors, simNet)
 
 	// Clock Sync
@@ -478,7 +515,16 @@ func serverSetUp(i int, simServer core.SvcConfig) Server {
 	localAddr := core.LocalAddress(simServer)
 	simClk := simutils.NewSimulationClock(log, tmp.Id, int64(i), timeRequests, waitRequests)
 	tmp.LocalClk = simClk
-	simNet := simutils.NewSimConnector(log, tmp.Id, localAddr, receiver, deadlineRequests)
+	simNet := simutils.NewSimConnector(
+		log,
+		tmp.Id,
+		localAddr,
+		receiver,
+		deadlineRequests,
+		NOPModifyMsg,
+		NOPModifyMsg,
+		DefineDefaultLatency,
+	)
 	simConnectors = append(simConnectors, simNet)
 
 	// Clock Sync

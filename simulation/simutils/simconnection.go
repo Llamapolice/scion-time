@@ -10,11 +10,12 @@ import (
 )
 
 type SimConnection struct {
-	Log      *zap.Logger
-	Id       string // maybe change to Int but start with string for easier debugging
-	ReadFrom chan SimPacket
-	WriteTo  chan SimPacket
-	Latency  time.Duration
+	Log            *zap.Logger
+	Id             string // maybe change to Int but start with string for easier debugging
+	ReadFrom       chan SimPacket
+	WriteTo        chan SimPacket
+	Latency        time.Duration
+	ModifyOutgoing func(packet *SimPacket)
 
 	Deadline time.Time
 	// Following are temporary, might be nice for debugging, but might change
@@ -93,7 +94,9 @@ func (S *SimConnection) WriteToUDPAddrPort(b []byte, addr netip.AddrPort) (int, 
 	if addr.Port() == 0 {
 		S.Log.Fatal("Writing to port 0 is not possible")
 	}
-	S.WriteTo <- SimPacket{B: b, TargetAddr: addr, SourceAddr: S.LAddr.AddrPort(), Latency: S.Latency}
+	packet := SimPacket{B: b, TargetAddr: addr, SourceAddr: S.LAddr.AddrPort(), Latency: S.Latency}
+	S.ModifyOutgoing(&packet)
+	S.WriteTo <- packet
 	return len(b), nil
 }
 

@@ -65,8 +65,6 @@ func (c SimClock) MaxDrift(duration time.Duration) time.Duration {
 }
 
 func (c SimClock) Step(offset time.Duration) {
-	//TODO implement me
-
 	// epoch part copied from sysclk_linux.go, not 100% what that does but probably not necessary
 	if c.epoch == math.MaxUint64 {
 		c.log.Error("SimClock.Step() has been called MaxUint64 times, should never be the case")
