@@ -13,6 +13,8 @@ ntske_server_name = "localhost"
 
 dscp = 63
 
+random_seed = 11
+
 [[servers]]
 local_address = "1-ff00:0:111,10.1.1.12"
 daemon_address = "simDaemon12" # empty for now, was "10.1.1.12:30255"
@@ -28,6 +30,8 @@ ntske_server_name = "localhost"
 
 dscp = 63
 
+random_seed = 12
+
 
 #[[clients]]
 #local_address = "1-ff00:0:111,10.1.1.13"
@@ -37,7 +41,10 @@ dscp = 63
 #
 #dscp = 63
 #
+#random_seed = 13
 #
 #[[tools]]
 #local_address = "1-ff00:0:111,10.1.1.20"
 #remote_address = "1-ff00:0:111,10.1.1.11:10123"
+#
+#random_seed = 20

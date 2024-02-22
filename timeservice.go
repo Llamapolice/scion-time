@@ -153,7 +153,7 @@ func runServer(configFile string) {
 	netcore.RegisterNetProvider(lnet)
 
 	localAddr.Host.Port = 0
-	refClocks, netClocks := core.CreateClocks(cfg, localAddr, lclk, lnet, log)
+	refClocks, netClocks := core.CreateClocks(cfg, localAddr, lclk, lnet, lcrypt, log)
 	syncClks := sync.RegisterClocks(refClocks, netClocks)
 
 	if len(refClocks) != 0 {
@@ -198,7 +198,7 @@ func runRelay(configFile string) {
 	netcore.RegisterNetProvider(lnet)
 
 	localAddr.Host.Port = 0
-	refClocks, netClocks := core.CreateClocks(cfg, localAddr, lclk, lnet, log)
+	refClocks, netClocks := core.CreateClocks(cfg, localAddr, lclk, lnet, lcrypt, log)
 	syncClks := sync.RegisterClocks(refClocks, netClocks)
 
 	if len(refClocks) != 0 {
@@ -242,7 +242,7 @@ func runClient(configFile string) {
 	netcore.RegisterNetProvider(lnet)
 
 	localAddr.Host.Port = 0
-	refClocks, netClocks := core.CreateClocks(cfg, localAddr, lclk, lnet, log)
+	refClocks, netClocks := core.CreateClocks(cfg, localAddr, lclk, lnet, lcrypt, log)
 	syncClks := sync.RegisterClocks(refClocks, netClocks)
 
 	scionClocksAvailable := false
@@ -361,7 +361,7 @@ func runSCIONTool(daemonAddr, dispatcherMode string, localAddr, remoteAddr *snet
 		core.ConfigureSCIONClientNTS(c, ntskeServer, ntskeInsecureSkipVerify, daemonAddr, laddr, raddr, log)
 	}
 
-	_, err = client.MeasureClockOffsetSCION(ctx, log, []*client.SCIONClient{c}, laddr, raddr, ps)
+	_, err = client.MeasureClockOffsetSCION(ctx, log, lcrypt, []*client.SCIONClient{c}, laddr, raddr, ps)
 	if err != nil {
 		log.Fatal("failed to measure clock offset",
 			zap.Stringer("remoteIA", raddr.IA),
@@ -414,7 +414,7 @@ func runSCIONBenchmark(daemonAddr string, localAddr, remoteAddr *snet.UDPAddr, a
 	lnet := &networking.UDPConnector{Log: zap.NewNop()}
 	netcore.RegisterNetProvider(lnet)
 
-	benchmark.RunSCIONBenchmark(daemonAddr, localAddr, remoteAddr, lclk, lnet, authModes, ntskeServer, log)
+	benchmark.RunSCIONBenchmark(daemonAddr, localAddr, remoteAddr, lclk, lnet, lcrypt, authModes, ntskeServer, log)
 }
 
 func runSimulation(seed int64, configFile string) {

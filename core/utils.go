@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
+	"example.com/scion-time/base/cryptobase"
 	"example.com/scion-time/base/netprovider"
 	"example.com/scion-time/base/timebase"
 	"example.com/scion-time/core/client"
@@ -11,6 +12,7 @@ import (
 	"example.com/scion-time/net/scion"
 	"example.com/scion-time/net/udp"
 	"example.com/scion-time/simulation/simutils"
+	"fmt"
 	"github.com/pelletier/go-toml/v2"
 	"github.com/scionproto/scion/pkg/addr"
 	"github.com/scionproto/scion/pkg/snet"
@@ -45,6 +47,7 @@ type SvcConfig struct {
 }
 
 type NtpReferenceClockSCION struct {
+	crypt      cryptobase.CryptoProvider
 	ntpcs      [scionRefClockNumClient]*client.SCIONClient
 	localAddr  udp.UDPAddr
 	remoteAddr udp.UDPAddr
@@ -58,7 +61,7 @@ func (c *NtpReferenceClockSCION) MeasureClockOffset(ctx context.Context, log *za
 	if c.pather != nil {
 		paths = c.pather.Paths(c.remoteAddr.IA)
 	}
-	return client.MeasureClockOffsetSCION(ctx, log, c.ntpcs[:], c.localAddr, c.remoteAddr, paths)
+	return client.MeasureClockOffsetSCION(ctx, log, c.crypt, c.ntpcs[:], c.localAddr, c.remoteAddr, paths)
 }
 
 type NtpReferenceClockIP struct {
@@ -96,6 +99,7 @@ func LoadConfig[T any](cfgStruct T, configFile string, log *zap.Logger) { // T i
 	}
 	err = toml.NewDecoder(bytes.NewReader(raw)).DisallowUnknownFields().Decode(cfgStruct)
 	if err != nil {
+		fmt.Println(err.(*toml.StrictMissingError).String())
 		log.Fatal("failed to decode configuration", zap.Error(err))
 	}
 }
@@ -106,6 +110,7 @@ func CreateClocks(
 	localAddr *snet.UDPAddr,
 	lclk timebase.LocalClock,
 	lnet netprovider.ConnProvider,
+	lcrypt cryptobase.CryptoProvider,
 	log *zap.Logger,
 ) (
 	refClocks, netClocks []client.ReferenceClock) {
@@ -138,6 +143,7 @@ func CreateClocks(
 				udp.UDPAddrFromSnet(remoteAddr),
 				lclk,
 				lnet,
+				lcrypt,
 				dscp,
 				cfg.AuthModes,
 				ntskeServer,
@@ -175,6 +181,7 @@ func CreateClocks(
 			udp.UDPAddrFromSnet(remoteAddr),
 			lclk,
 			lnet,
+			lcrypt,
 			dscp,
 			cfg.AuthModes,
 			ntskeServer,
@@ -285,6 +292,7 @@ func NewNTPReferenceClockSCION(
 	localAddr, remoteAddr udp.UDPAddr,
 	lclk timebase.LocalClock,
 	lnet netprovider.ConnProvider,
+	lcrypt cryptobase.CryptoProvider,
 	dscp uint8,
 	authModes []string,
 	ntskeServer string,
@@ -292,6 +300,7 @@ func NewNTPReferenceClockSCION(
 	log *zap.Logger,
 ) *NtpReferenceClockSCION {
 	c := &NtpReferenceClockSCION{
+		crypt:      lcrypt,
 		localAddr:  localAddr,
 		remoteAddr: remoteAddr,
 	}

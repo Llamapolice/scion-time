@@ -3,6 +3,7 @@ package benchmark
 import (
 	"context"
 	"crypto/tls"
+	"example.com/scion-time/base/cryptobase"
 	"example.com/scion-time/base/netprovider"
 	"example.com/scion-time/base/timebase"
 	"net"
@@ -27,6 +28,7 @@ func RunSCIONBenchmark(
 	localAddr, remoteAddr *snet.UDPAddr,
 	lclk timebase.LocalClock,
 	lnet netprovider.ConnProvider,
+	lcrypt cryptobase.CryptoProvider,
 	authModes []string,
 	ntskeServer string,
 	log *zap.Logger,
@@ -103,7 +105,7 @@ func RunSCIONBenchmark(
 			<-sg
 			ntpcs := []*client.SCIONClient{c}
 			for j := numRequestPerClient; j > 0; j-- {
-				_, err = client.MeasureClockOffsetSCION(ctx, log, ntpcs, laddr, raddr, ps)
+				_, err = client.MeasureClockOffsetSCION(ctx, log, lcrypt, ntpcs, laddr, raddr, ps)
 				if err != nil {
 					log.Info("failed to measure clock offset",
 						zap.Stringer("remoteIA", raddr.IA),

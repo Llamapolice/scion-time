@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"errors"
+	"example.com/scion-time/base/cryptobase"
 	"net"
 	"sync/atomic"
 	"time"
@@ -12,7 +13,6 @@ import (
 	"go.uber.org/zap"
 
 	"example.com/scion-time/base/timemath"
-	"example.com/scion-time/core/cryptocore"
 	"example.com/scion-time/net/scion"
 	"example.com/scion-time/net/udp"
 )
@@ -101,13 +101,13 @@ loop:
 	return j
 }
 
-func MeasureClockOffsetSCION(ctx context.Context, log *zap.Logger,
+func MeasureClockOffsetSCION(ctx context.Context, log *zap.Logger, crypt cryptobase.CryptoProvider,
 	ntpcs []*SCIONClient, localAddr, remoteAddr udp.UDPAddr, ps []snet.Path) (
 	time.Duration, error) {
 	mtrcs := scionMetrics.Load()
 
 	sps := make([]snet.Path, len(ntpcs))
-	n, err := cryptocore.Sample(ctx, len(sps), len(ps), func(dst, src int) {
+	n, err := crypt.Sample(ctx, len(sps), len(ps), func(dst, src int) {
 		sps[dst] = ps[src]
 	})
 	if err != nil {
