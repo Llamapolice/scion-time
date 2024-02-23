@@ -5,27 +5,30 @@ import (
 	"go.uber.org/zap"
 	"golang.org/x/net/context"
 	"math"
+	"sync/atomic"
 	"time"
 
 	"example.com/scion-time/base/timebase"
 )
 
 type SimClock struct {
-	Id          string
-	log         *zap.Logger
-	ModifyTime  func(time time.Time) time.Time
-	epoch       uint64
-	timeRequest chan TimeRequest
-	waitRequest chan WaitRequest
+	Id                    string
+	log                   *zap.Logger
+	ModifyTime            func(time time.Time) time.Time
+	epoch                 uint64
+	timeRequest           chan TimeRequest
+	WaitRequest           chan WaitRequest
+	ExpectedWaitQueueSize *atomic.Int32
 }
 
-func NewSimulationClock(log *zap.Logger, id string, ModifyTime func(t time.Time) time.Time, timeRequest chan TimeRequest, waitRequest chan WaitRequest) *SimClock {
+func NewSimulationClock(log *zap.Logger, id string, ModifyTime func(t time.Time) time.Time, timeRequest chan TimeRequest, waitRequest chan WaitRequest, ExpectedWaitQueueSize *atomic.Int32) *SimClock {
 	return &SimClock{
-		Id:          id + "_clk",
-		log:         log,
-		ModifyTime:  ModifyTime,
-		timeRequest: timeRequest,
-		waitRequest: waitRequest,
+		Id:                    id + "_clk",
+		log:                   log,
+		ModifyTime:            ModifyTime,
+		timeRequest:           timeRequest,
+		WaitRequest:           waitRequest,
+		ExpectedWaitQueueSize: ExpectedWaitQueueSize,
 	}
 }
 
@@ -73,7 +76,7 @@ func (c SimClock) Sleep(duration time.Duration) {
 	unblock := func() {
 		unblockChan <- struct{}{}
 	}
-	c.waitRequest <- WaitRequest{Id: c.Id, SleepDuration: duration, Action: unblock}
+	c.WaitRequest <- WaitRequest{Id: c.Id, SleepDuration: duration, Action: unblock}
 	<-unblockChan
 	close(unblockChan)
 }

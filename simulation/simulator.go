@@ -125,7 +125,7 @@ var (
 	receiver              chan simutils.SimPacket
 	globalModifyMsg       func(packet simutils.SimPacket) simutils.SimPacket
 	simConnectors         []*simutils.SimConnector
-	expectedWaitQueueSize *atomic.Int32
+	ExpectedWaitQueueSize *atomic.Int32
 	waitingConnections    *atomic.Int32
 	scanner               *bufio.Scanner
 	timeRequests          chan simutils.TimeRequest
@@ -145,7 +145,7 @@ func RunSimulation(configFile string, logger *zap.Logger) {
 	// Set up file package vars
 	simConnectors = make([]*simutils.SimConnector, 0, len(cfg.Clients)+len(cfg.Relays)+len(cfg.Servers)+len(cfg.Tools))
 	scanner = bufio.NewScanner(os.Stdin)
-	expectedWaitQueueSize = &atomic.Int32{}
+	ExpectedWaitQueueSize = &atomic.Int32{}
 	waitingConnections = &atomic.Int32{}
 
 	// Standard NOP packet modification in message handler
@@ -192,7 +192,7 @@ func RunSimulation(configFile string, logger *zap.Logger) {
 			}
 			log.Warn("Targeted address does not exist (yet), message dropped",
 				zap.String("target", targetAddr.String()))
-			//expectedWaitQueueSize.Add(-1)
+			//ExpectedWaitQueueSize.Add(-1)
 		}
 		log.Info("\u001B[34mMessage handler terminating\u001B[0m")
 	}()
@@ -217,7 +217,7 @@ func RunSimulation(configFile string, logger *zap.Logger) {
 				log.Debug("Wait has been requested", zap.String("by", req.Id), zap.Duration("duration", req.SleepDuration))
 				currentlyWaiting = append(currentlyWaiting, req)
 			case req := <-deadlineRequests:
-				expectedWaitQueueSize.Add(1)
+				ExpectedWaitQueueSize.Add(1)
 				log.Debug("Deadline has been requested", zap.String("by", req.Id))
 				log.Debug("adding waiter deadline request")
 				req.RequestTime = now
@@ -228,7 +228,7 @@ func RunSimulation(configFile string, logger *zap.Logger) {
 					Action: func() {
 						log.Debug("removing waiter deadline request")
 						req.Unblock <- duration
-						expectedWaitQueueSize.Add(-1)
+						ExpectedWaitQueueSize.Add(-1)
 					},
 				}
 				currentlyWaiting = append(currentlyWaiting, waitForDeadline)
@@ -239,13 +239,14 @@ func RunSimulation(configFile string, logger *zap.Logger) {
 						"\u001B[41m======== TIME HANDLER ========\u001B[0m",
 						zap.Int("waiting sleepers", len(currentlyWaiting)),
 						zap.Int32("waiting connections", waitingConnections.Load()),
-						zap.Int32("expected to wait", expectedWaitQueueSize.Load()),
+						zap.Int32("expected to wait", ExpectedWaitQueueSize.Load()),
 					)
-					if len(currentlyWaiting)+int(waitingConnections.Load()) < int(expectedWaitQueueSize.Load()) { // TODO how to adjust this number dynamically?
+					if len(currentlyWaiting)+int(waitingConnections.Load()) < int(ExpectedWaitQueueSize.Load()) { // TODO how to adjust this number dynamically?
 						continue
 					}
-					log.Info("Handling the next waiting request")
-					log.Info("Enter 'w' to wait one loop for other goroutines or enter 'p' to process the next request in the queue")
+					log.Info("When this message appears, 'waiting sleepers' + 'waiting connections' should be exactly equal to 'expected to wait'")
+					log.Info("And when you enter w, nothing should happen until this log message appears again")
+					log.Info("Enter 'w' to wait one loop for other goroutines or enter 'p' to process the next request in the queue (q for os.Exit(0))")
 					scanner.Scan()
 					if scanner.Text() == "q" {
 						os.Exit(0)
@@ -253,6 +254,7 @@ func RunSimulation(configFile string, logger *zap.Logger) {
 					if scanner.Text() != "p" {
 						continue
 					}
+					log.Info("Handling the next waiting request")
 					minDuration := time.Hour
 					minIndex := 10000000
 					for i, request := range currentlyWaiting {
@@ -281,7 +283,7 @@ func RunSimulation(configFile string, logger *zap.Logger) {
 	simServers := make([]Server, len(cfg.Servers))
 
 	for i, simServer := range cfg.Servers {
-		expectedWaitQueueSize.Add(1)
+		ExpectedWaitQueueSize.Add(1)
 		log.Debug("adding waiter server setup")
 
 		tmp := serverSetUp(i, simServer)
@@ -299,7 +301,7 @@ func RunSimulation(configFile string, logger *zap.Logger) {
 	simRelays := make([]Relay, len(cfg.Relays))
 
 	for i, relay := range cfg.Relays {
-		expectedWaitQueueSize.Add(1)
+		ExpectedWaitQueueSize.Add(1)
 		log.Debug("adding waiter relay setup")
 
 		tmp := relaySetUp(i, relay)
@@ -316,7 +318,7 @@ func RunSimulation(configFile string, logger *zap.Logger) {
 		zap.Int("amount", len(cfg.Clients)))
 	simClients := make([]Client, len(cfg.Clients))
 	for i, clnt := range cfg.Clients {
-		expectedWaitQueueSize.Add(1)
+		ExpectedWaitQueueSize.Add(1)
 		log.Debug("adding waiter client setup")
 
 		tmp := clientSetUp(i, clnt)
@@ -330,7 +332,7 @@ func RunSimulation(configFile string, logger *zap.Logger) {
 	log.Info("\u001B[34mSetup completed\u001B[0m")
 
 	for i, tool := range cfg.Tools {
-		expectedWaitQueueSize.Add(1)
+		ExpectedWaitQueueSize.Add(1)
 		log.Debug("adding waiter tool setup")
 		log.Info("\u001B[34mRunning Tool\u001B[0m", zap.Int("tool", i))
 
@@ -363,14 +365,14 @@ func pauseSetUp(instance SimSvcConfig, instanceType string, i int) {
 	<-unblockChan
 	close(unblockChan)
 	log.Debug("removing waiter in setup for " + instanceType)
-	expectedWaitQueueSize.Add(-1)
+	ExpectedWaitQueueSize.Add(-1)
 }
 
 func runTool(i int, tool SimSvcConfig) {
 	id := "tool_" + strconv.Itoa(i)
 	ctxClient := context.Background()
 
-	lclk := simutils.NewSimulationClock(log, id, NOPModifyTime, timeRequests, waitRequests)
+	lclk := simutils.NewSimulationClock(log, id, NOPModifyTime, timeRequests, waitRequests, ExpectedWaitQueueSize)
 
 	var laddr udp.UDPAddr
 	var raddr udp.UDPAddr
@@ -387,7 +389,7 @@ func runTool(i int, tool SimSvcConfig) {
 	}
 	raddr = udp.UDPAddrFromSnet(&raddrSNET)
 
-	simConnector := simutils.NewSimConnector(log, id, &laddrSNET, receiver, deadlineRequests, NOPModifyMsg, NOPModifyMsg, DefineDefaultLatency, expectedWaitQueueSize, waitingConnections)
+	simConnector := simutils.NewSimConnector(log, id, &laddrSNET, receiver, deadlineRequests, NOPModifyMsg, NOPModifyMsg, DefineDefaultLatency, ExpectedWaitQueueSize, waitingConnections)
 	simConnectors = append(simConnectors, simConnector)
 
 	simCrypt := simutils.NewSimCrypto(tool.Seed, log)
@@ -415,11 +417,11 @@ func clientSetUp(i int, clnt SimSvcConfig) Client {
 	tmp := newClient(receiver)
 	tmp.Id += strconv.Itoa(i)
 
-	simClk := simutils.NewSimulationClock(log, tmp.Id, NOPModifyTime, timeRequests, waitRequests)
+	simClk := simutils.NewSimulationClock(log, tmp.Id, NOPModifyTime, timeRequests, waitRequests, ExpectedWaitQueueSize)
 	tmp.LocalClk = simClk
 
 	laddr := core.LocalAddress(clnt.SvcConfig)
-	simNet := simutils.NewSimConnector(log, tmp.Id, laddr, receiver, deadlineRequests, NOPModifyMsg, NOPModifyMsg, DefineDefaultLatency, expectedWaitQueueSize, waitingConnections)
+	simNet := simutils.NewSimConnector(log, tmp.Id, laddr, receiver, deadlineRequests, NOPModifyMsg, NOPModifyMsg, DefineDefaultLatency, ExpectedWaitQueueSize, waitingConnections)
 	simConnectors = append(simConnectors, simNet)
 
 	simCrypt := simutils.NewSimCrypto(clnt.Seed, log)
@@ -458,11 +460,11 @@ func relaySetUp(i int, relay SimSvcConfig) Relay {
 	tmp := newRelay(receiver)
 	tmp.Id = tmp.Id + strconv.Itoa(i)
 
-	simClk := simutils.NewSimulationClock(log, tmp.Id, NOPModifyTime, timeRequests, waitRequests)
+	simClk := simutils.NewSimulationClock(log, tmp.Id, NOPModifyTime, timeRequests, waitRequests, ExpectedWaitQueueSize)
 	tmp.LocalClk = simClk
 
 	localAddr := core.LocalAddress(relay.SvcConfig)
-	simNet := simutils.NewSimConnector(log, tmp.Id, localAddr, receiver, deadlineRequests, NOPModifyMsg, NOPModifyMsg, DefineDefaultLatency, expectedWaitQueueSize, waitingConnections)
+	simNet := simutils.NewSimConnector(log, tmp.Id, localAddr, receiver, deadlineRequests, NOPModifyMsg, NOPModifyMsg, DefineDefaultLatency, ExpectedWaitQueueSize, waitingConnections)
 	simConnectors = append(simConnectors, simNet)
 
 	simCrypt := simutils.NewSimCrypto(relay.Seed, log)
@@ -501,11 +503,11 @@ func serverSetUp(i int, simServer SimSvcConfig) Server {
 	tmp := newServer(receiver)
 	tmp.Id = tmp.Id + strconv.Itoa(i)
 
-	simClk := simutils.NewSimulationClock(log, tmp.Id, NOPModifyTime, timeRequests, waitRequests)
+	simClk := simutils.NewSimulationClock(log, tmp.Id, NOPModifyTime, timeRequests, waitRequests, ExpectedWaitQueueSize)
 	tmp.LocalClk = simClk
 
 	localAddr := core.LocalAddress(simServer.SvcConfig)
-	simNet := simutils.NewSimConnector(log, tmp.Id, localAddr, receiver, deadlineRequests, NOPModifyMsg, NOPModifyMsg, DefineDefaultLatency, expectedWaitQueueSize, waitingConnections)
+	simNet := simutils.NewSimConnector(log, tmp.Id, localAddr, receiver, deadlineRequests, NOPModifyMsg, NOPModifyMsg, DefineDefaultLatency, ExpectedWaitQueueSize, waitingConnections)
 	simConnectors = append(simConnectors, simNet)
 
 	simCrypt := simutils.NewSimCrypto(simServer.Seed, log)
@@ -519,14 +521,15 @@ func serverSetUp(i int, simServer SimSvcConfig) Server {
 	tmp.SyncClks = syncClks
 	if len(refClocks) != 0 {
 		log.Debug("Found reference clocks, adding waiters", zap.Int("amount", len(refClocks)))
-		expectedWaitQueueSize.Add(int32(len(refClocks)))
+		ExpectedWaitQueueSize.Add(int32(len(refClocks)))
 		sync.SyncToRefClocks(log, simClk, syncClks)
+		ExpectedWaitQueueSize.Add(int32(-len(refClocks)))
 		go sync.RunLocalClockSync(log, simClk, syncClks)
 	}
 
 	if len(netClocks) != 0 {
-		log.Debug("Found net clocks, adding waiters", zap.Int("amount", len(netClocks)))
-		expectedWaitQueueSize.Add(int32(len(netClocks)))
+		log.Debug("Found net clocks, NOT adding waiters", zap.Int("amount", len(netClocks)))
+		//ExpectedWaitQueueSize.Add(int32(len(netClocks)))
 		go sync.RunGlobalClockSync(log, simClk, syncClks)
 	}
 	log.Debug("Clock sync active")

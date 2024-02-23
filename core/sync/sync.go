@@ -70,7 +70,8 @@ func RegisterClocks(refClocks, netClocks []client.ReferenceClock) *SyncableClock
 
 func (c *SyncableClocks) measureOffsetToRefClocks(log *zap.Logger, lclk timebase.LocalClock, timeout time.Duration) time.Duration {
 	log.Debug("Measuring offset to reference clocks", zap.String("clock holder id", c.Id))
-	ctx, cancel := context.WithDeadline(context.Background(), lclk.Now().Add(timeout))
+	//ctx, cancel := context.WithDeadline(context.Background(), lclk.Now().Add(timeout))
+	ctx, cancel := simutils.WithDeadline(lclk, timeout) // TODO this is still breaking for normal use
 	defer cancel()
 	c.refClkClient.MeasureClockOffsets(ctx, log, c.refClks, c.refClkOffsets)
 	return timemath.Median(c.refClkOffsets)
@@ -124,7 +125,8 @@ func RunLocalClockSync(log *zap.Logger, lclk timebase.LocalClock, syncClks *Sync
 
 func (c *SyncableClocks) measureOffsetToNetClocks(log *zap.Logger, lclk timebase.LocalClock, timeout time.Duration) time.Duration {
 	log.Debug("\033[47mMeasuring offset to net clocks\033[0m", zap.String("clock holder id", c.Id), zap.Int("num net clks", len(c.netClks)))
-	ctx, cancel := context.WithDeadline(context.Background(), lclk.Now().Add(timeout))
+	//ctx, cancel := context.WithDeadline(context.Background(), lclk.Now().Add(timeout))
+	ctx, cancel := simutils.WithDeadline(lclk, timeout) // TODO this is still breaking for normal use
 	defer cancel()
 	c.netClkClient.MeasureClockOffsets(ctx, log, c.netClks, c.netClkOffsets)
 	log.Debug("\033[47mFinished measuring offset to net clocks\033[0m", zap.String("clock holder id", c.Id))
