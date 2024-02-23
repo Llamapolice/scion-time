@@ -14,7 +14,7 @@ import (
 	"github.com/scionproto/scion/pkg/snet"
 	"github.com/scionproto/scion/pkg/snet/path"
 	"go.uber.org/zap"
-	net2 "net"
+	"net"
 	"os"
 	"strconv"
 	"sync/atomic"
@@ -25,7 +25,7 @@ const maxNumberOfInstances = 30
 
 // FAKE CONSTANTS
 var NOPModifyMsg = func(_ *simutils.SimPacket) {}
-var DefineDefaultLatency = func(_ *net2.UDPAddr) time.Duration { return 2 * time.Millisecond }
+var DefineDefaultLatency = func(_ *net.UDPAddr) time.Duration { return 2 * time.Millisecond }
 
 type SimConfigFile struct {
 	Servers []SimSvcConfig `toml:"servers"`
