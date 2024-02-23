@@ -14,6 +14,7 @@ ntske_server_name = "localhost"
 dscp = 63
 
 random_seed = 11
+delay_after_start_seconds = "11s"
 
 [[servers]]
 local_address = "1-ff00:0:111,10.1.1.12"
@@ -31,7 +32,7 @@ ntske_server_name = "localhost"
 dscp = 63
 
 random_seed = 12
-
+delay_after_start_seconds = "12s"
 
 #[[clients]]
 #local_address = "1-ff00:0:111,10.1.1.13"
@@ -42,9 +43,11 @@ random_seed = 12
 #dscp = 63
 #
 #random_seed = 13
+#delay_after_start_seconds = "13s"
 #
 #[[tools]]
 #local_address = "1-ff00:0:111,10.1.1.20"
 #remote_address = "1-ff00:0:111,10.1.1.11:10123"
 #
 #random_seed = 20
+#delay_after_start_seconds = "20s"

@@ -12,26 +12,18 @@ import (
 
 type SimClock struct {
 	Id          string
-	seed        int64 // still TODO if this is needed
 	log         *zap.Logger
+	ModifyTime  func(time time.Time) time.Time
 	epoch       uint64
-	time        time.Time
 	timeRequest chan TimeRequest
 	waitRequest chan WaitRequest
-
-	counter int // See Now() below, temporary hack to stop unlimited execution
 }
 
-var NumberOfClocks int
-
-func NewSimulationClock(log *zap.Logger, id string, seed int64, timeRequest chan TimeRequest, waitRequest chan WaitRequest) *SimClock {
-	NumberOfClocks += 1
+func NewSimulationClock(log *zap.Logger, id string, ModifyTime func(t time.Time) time.Time, timeRequest chan TimeRequest, waitRequest chan WaitRequest) *SimClock {
 	return &SimClock{
 		Id:          id + "_clk",
-		seed:        seed,
 		log:         log,
-		counter:     0,
-		time:        time.Unix(0, 0),
+		ModifyTime:  ModifyTime,
 		timeRequest: timeRequest,
 		waitRequest: waitRequest,
 	}
@@ -43,20 +35,11 @@ func (c SimClock) Epoch() uint64 {
 }
 
 func (c SimClock) Now() time.Time {
-	//if c.counter > 1000 { // Hack to stop endless looping
-	//	panic("Hard cutoff point reached")
-	//}
-	//c.counter++
-	//var ns int64 = c.time.UnixNano()
-	//c.time = c.time.Add(time.Duration(1e9))
-	//c.log.Debug("Time is now", zap.Int64("ns", ns), zap.String("clock id", c.Id))
-	//return time.Unix(0, ns)
 	ans := make(chan time.Time)
 	c.timeRequest <- TimeRequest{Id: c.Id, ReturnChan: ans}
 	trueTime := <-ans
-	// TODO modify this true time to add variability
 	close(ans)
-	return trueTime
+	return c.ModifyTime(trueTime)
 }
 
 func (c SimClock) MaxDrift(duration time.Duration) time.Duration {
@@ -81,15 +64,11 @@ func (c SimClock) Adjust(offset, duration time.Duration, frequency float64) {
 		zap.Duration("duration", duration),
 		zap.Float64("frequency", frequency),
 	)
-	// TODO actually do something lul
+	// TODO this currently does nothing, SimCLk is still in skeleton phase
 }
 
 func (c SimClock) Sleep(duration time.Duration) {
-	//TODO implement me correctly
-	//duration = time.Second
-	//duration *= 15 // slowed down for debugging/construction purposes
 	c.log.Debug("SimClock sleeping", zap.String("id", c.Id), zap.Duration("duration", duration))
-	//time.Sleep(duration)
 	unblockChan := make(chan struct{})
 	unblock := func() {
 		unblockChan <- struct{}{}

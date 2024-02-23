@@ -26,6 +26,7 @@ const maxNumberOfInstances = 30
 // FAKE CONSTANTS
 var NOPModifyMsg = func(_ *simutils.SimPacket) {}
 var DefineDefaultLatency = func(_ *net.UDPAddr) time.Duration { return 2 * time.Millisecond }
+var NOPModifyTime = func(t time.Time) time.Time { return t }
 
 type SimConfigFile struct {
 	Servers []SimSvcConfig `toml:"servers"`
@@ -36,7 +37,8 @@ type SimConfigFile struct {
 
 type SimSvcConfig struct {
 	core.SvcConfig
-	Seed int64 `toml:"random_seed,omitempty"`
+	Seed            int64  `toml:"random_seed,omitempty"`
+	DelayAfterStart string `toml:"delay_after_start,omitempty"`
 }
 
 type Instance struct {
@@ -203,7 +205,6 @@ func RunSimulation(configFile string, logger *zap.Logger) {
 		log.Info("Time handler started")
 		now := time.Unix(10000, 0)
 		currentlyWaiting := make([]simutils.WaitRequest, 0, maxNumberOfInstances)
-		//deadlines := make([]simutils.DeadlineRequest, 0, maxNumberOfInstances*3) // 3 connections max per instance sounds reasonable?
 		timeRequests = make(chan simutils.TimeRequest)
 		waitRequests = make(chan simutils.WaitRequest)
 		deadlineRequests = make(chan simutils.DeadlineRequest)
@@ -231,10 +232,8 @@ func RunSimulation(configFile string, logger *zap.Logger) {
 					},
 				}
 				currentlyWaiting = append(currentlyWaiting, waitForDeadline)
-				//deadlines = append(deadlines, req)
 			default:
 				time.Sleep(time.Second / 2) // TODO just for development
-				//if len(currentlyWaiting) == simutils.NumberOfClocks {
 				if len(currentlyWaiting) >= 0 {
 					log.Info(
 						"\u001B[41m======== TIME HANDLER ========\u001B[0m",
@@ -271,18 +270,6 @@ func RunSimulation(configFile string, logger *zap.Logger) {
 					log.Debug("Time handler unblocks a sleeper", zap.String("id", shortestRequest.Id), zap.Time("updated time", now))
 					shortestRequest.Action()
 				}
-				//is := make([]int, 0)
-				//for i, deadline := range deadlines {
-				//	if deadline.Deadline.Before(now) {
-				//		deadline.Unblock <- now.Sub(deadline.RequestTime)
-				//		is = append(is, i)
-				//	}
-				//}
-				//adj := 0
-				//for _, i := range is {
-				//	deadlines = append(deadlines[:i-adj], deadlines[i-adj+1:]...)
-				//	adj += 1 // This is to adjust the indices when multiple are to be removed
-				//}
 			}
 		}
 	}()
@@ -296,20 +283,13 @@ func RunSimulation(configFile string, logger *zap.Logger) {
 	for i, simServer := range cfg.Servers {
 		expectedWaitQueueSize.Add(1)
 		log.Debug("adding waiter server setup")
+
 		tmp := serverSetUp(i, simServer)
 		simServers[i] = tmp
-		log.Debug("\u001B[34mDone setting up server, press c to time handler to continue\u001B[0m",
+
+		log.Debug("\u001B[34mDone setting up server, waiting for deadline to continue\u001B[0m",
 			zap.String("server id", tmp.Id))
-		unblockChan := make(chan struct{})
-		waitRequests <- simutils.WaitRequest{
-			Id:            "afterStartDelay_server_" + strconv.Itoa(i),
-			SleepDuration: 20 * time.Second,
-			Action:        func() { unblockChan <- struct{}{} },
-		}
-		<-unblockChan
-		close(unblockChan)
-		log.Debug("removing waiter server setup")
-		expectedWaitQueueSize.Add(-1)
+		pauseSetUp(simServer, "server", i)
 	}
 
 	// Relays
@@ -319,12 +299,15 @@ func RunSimulation(configFile string, logger *zap.Logger) {
 	simRelays := make([]Relay, len(cfg.Relays))
 
 	for i, relay := range cfg.Relays {
+		expectedWaitQueueSize.Add(1)
+		log.Debug("adding waiter relay setup")
+
 		tmp := relaySetUp(i, relay)
 
 		simRelays[i] = tmp
-		log.Debug("\u001B[34mDone setting up relay, press Enter to continue\u001B[0m",
+		log.Debug("\u001B[34mDone setting up relay, waiting for deadline to continue\u001B[0m",
 			zap.String("relay id", tmp.Id))
-		//scanner.Scan()
+		pauseSetUp(relay, "relay", i)
 	}
 
 	// Clients
@@ -333,20 +316,27 @@ func RunSimulation(configFile string, logger *zap.Logger) {
 		zap.Int("amount", len(cfg.Clients)))
 	simClients := make([]Client, len(cfg.Clients))
 	for i, clnt := range cfg.Clients {
-		tmp := clientSetUp(i, clnt)
+		expectedWaitQueueSize.Add(1)
+		log.Debug("adding waiter client setup")
 
+		tmp := clientSetUp(i, clnt)
 		simClients[i] = tmp
-		log.Debug("\u001B[34mDone setting up client, press Enter to continue\u001B[0m",
+
+		log.Debug("\u001B[34mDone setting up client, waiting for deadline to continue\u001B[0m",
 			zap.String("client id", tmp.Id))
-		//scanner.Scan()
+		pauseSetUp(clnt, "client", i)
 	}
 
 	log.Info("\u001B[34mSetup completed\u001B[0m")
 
 	for i, tool := range cfg.Tools {
-		log.Info("\u001B[34mPress Enter to run tool\u001B[0m", zap.Int("tool", i))
-		//scanner.Scan()
+		expectedWaitQueueSize.Add(1)
+		log.Debug("adding waiter tool setup")
+		log.Info("\u001B[34mRunning Tool\u001B[0m", zap.Int("tool", i))
+
 		runTool(i, tool)
+
+		pauseSetUp(tool, "tool", i)
 	}
 
 	// Main loop of simulation
@@ -359,11 +349,28 @@ func RunSimulation(configFile string, logger *zap.Logger) {
 	select {}
 }
 
+func pauseSetUp(instance SimSvcConfig, instanceType string, i int) {
+	unblockChan := make(chan struct{})
+	waitDuration, err := time.ParseDuration(instance.DelayAfterStart)
+	if err != nil {
+		log.Fatal("delay_after_start failed to parse from config", zap.Int(instanceType+" number", i))
+	}
+	waitRequests <- simutils.WaitRequest{
+		Id:            "afterStartDelay_" + instanceType + strconv.Itoa(i),
+		SleepDuration: waitDuration,
+		Action:        func() { unblockChan <- struct{}{} },
+	}
+	<-unblockChan
+	close(unblockChan)
+	log.Debug("removing waiter in setup for " + instanceType)
+	expectedWaitQueueSize.Add(-1)
+}
+
 func runTool(i int, tool SimSvcConfig) {
 	id := "tool_" + strconv.Itoa(i)
 	ctxClient := context.Background()
 
-	lclk := simutils.NewSimulationClock(log, id, int64(i), timeRequests, waitRequests)
+	lclk := simutils.NewSimulationClock(log, id, NOPModifyTime, timeRequests, waitRequests)
 
 	var laddr udp.UDPAddr
 	var raddr udp.UDPAddr
@@ -392,7 +399,7 @@ func runTool(i int, tool SimSvcConfig) {
 		path.Path{Src: laddrSNET.IA, Dst: raddrSNET.IA, DataplanePath: path.Empty{}},
 	}
 
-	go func() {
+	go func() { // TODO does this still need to be in a goroutine?
 		log.Debug("Tool setup complete, running offset measurement now", zap.String("id", id))
 		medianDuration, err := client.MeasureClockOffsetSCION(ctxClient, log, simCrypt, ntpcs, laddr, raddr, ps)
 		if err != nil {
@@ -408,7 +415,7 @@ func clientSetUp(i int, clnt SimSvcConfig) Client {
 	tmp := newClient(receiver)
 	tmp.Id += strconv.Itoa(i)
 
-	simClk := simutils.NewSimulationClock(log, tmp.Id, int64(i), timeRequests, waitRequests)
+	simClk := simutils.NewSimulationClock(log, tmp.Id, NOPModifyTime, timeRequests, waitRequests)
 	tmp.LocalClk = simClk
 
 	laddr := core.LocalAddress(clnt.SvcConfig)
@@ -451,7 +458,7 @@ func relaySetUp(i int, relay SimSvcConfig) Relay {
 	tmp := newRelay(receiver)
 	tmp.Id = tmp.Id + strconv.Itoa(i)
 
-	simClk := simutils.NewSimulationClock(log, tmp.Id, int64(i), timeRequests, waitRequests)
+	simClk := simutils.NewSimulationClock(log, tmp.Id, NOPModifyTime, timeRequests, waitRequests)
 	tmp.LocalClk = simClk
 
 	localAddr := core.LocalAddress(relay.SvcConfig)
@@ -494,7 +501,7 @@ func serverSetUp(i int, simServer SimSvcConfig) Server {
 	tmp := newServer(receiver)
 	tmp.Id = tmp.Id + strconv.Itoa(i)
 
-	simClk := simutils.NewSimulationClock(log, tmp.Id, int64(i), timeRequests, waitRequests)
+	simClk := simutils.NewSimulationClock(log, tmp.Id, NOPModifyTime, timeRequests, waitRequests)
 	tmp.LocalClk = simClk
 
 	localAddr := core.LocalAddress(simServer.SvcConfig)

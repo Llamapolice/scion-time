@@ -55,9 +55,6 @@ func (c *localReferenceClock) MeasureClockOffset(context.Context, *zap.Logger) (
 }
 
 func RegisterClocks(refClocks, netClocks []client.ReferenceClock) *SyncableClocks {
-	//if refClks != nil || netClks != nil {
-	//	panic("reference clocks already registered")
-	//}
 	clks := SyncableClocks{}
 
 	clks.refClks = refClocks
