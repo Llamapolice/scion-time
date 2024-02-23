@@ -10,6 +10,14 @@ type PortReleaseMsg struct {
 	Port  int
 }
 
+type SimConnectionError struct {
+	errString string
+}
+
+func (e SimConnectionError) Error() string {
+	return e.errString
+}
+
 type SimConnectorError struct {
 	errString string
 }

@@ -418,7 +418,7 @@ func runSCIONBenchmark(daemonAddr string, localAddr, remoteAddr *snet.UDPAddr, a
 }
 
 func runSimulation(seed int64, configFile string) {
-	simulation.RunSimulation(configFile, seed, log)
+	simulation.RunSimulation(configFile, log)
 }
 
 func runDRKeyDemo(daemonAddr string, serverMode bool, serverAddr, clientAddr *snet.UDPAddr) {

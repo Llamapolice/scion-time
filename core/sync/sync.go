@@ -126,7 +126,7 @@ func RunLocalClockSync(log *zap.Logger, lclk timebase.LocalClock, syncClks *Sync
 }
 
 func (c *SyncableClocks) measureOffsetToNetClocks(log *zap.Logger, lclk timebase.LocalClock, timeout time.Duration) time.Duration {
-	log.Debug("\033[47mMeasuring offset to net clocks\033[0m", zap.String("clock holder id", c.Id))
+	log.Debug("\033[47mMeasuring offset to net clocks\033[0m", zap.String("clock holder id", c.Id), zap.Int("num net clks", len(c.netClks)))
 	ctx, cancel := context.WithDeadline(context.Background(), lclk.Now().Add(timeout))
 	defer cancel()
 	c.netClkClient.MeasureClockOffsets(ctx, log, c.netClks, c.netClkOffsets)

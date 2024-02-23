@@ -17,7 +17,9 @@ type SimConnection struct {
 	Latency        time.Duration
 	ModifyOutgoing func(packet *SimPacket)
 
-	Deadline time.Time
+	// Internal usage
+	Deadline      time.Time
+	StopListening chan struct{}
 	// Following are temporary, might be nice for debugging, but might change
 	DSCP uint8
 	// These are used by the SimConnector to handle connections
@@ -27,15 +29,23 @@ type SimConnection struct {
 	ConnectionsHandler chan RequestFromMapHandler
 	RequestDeadline    chan DeadlineRequest
 	WaitCounter        *atomic.Int32
+	expired            bool
 }
 
 func (S *SimConnection) Close() error {
 	if S.Closed {
+		if S.expired {
+			S.WaitCounter.Add(1)
+		}
 		S.Log.Error("Trying to close already closed connection",
 			zap.String("conn id", S.Id), zap.String("conn laddr", S.LAddr.String()))
 		return nil
 	}
+	if S.expired {
+		S.WaitCounter.Add(-1)
+	}
 	S.Closed = true
+	//S.expired = false
 	tmp := make(chan interface{})
 	S.Log.Debug("Removing simconnection from map", zap.String("id", S.Id))
 	S.ConnectionsHandler <- RequestFromMapHandler{
@@ -45,9 +55,10 @@ func (S *SimConnection) Close() error {
 		ReturnBack: tmp,
 	}
 	<-tmp
-	close(S.ReadFrom)
 	S.Log.Debug("Closed simulated connection",
 		zap.String("connection id", S.Id), zap.String("network", S.Network))
+	S.StopListening <- struct{}{}
+	close(S.ReadFrom)
 	return nil
 }
 
@@ -65,14 +76,22 @@ func (S *SimConnection) ReadMsgUDPAddrPort(buf []byte, oob []byte) (
 ) {
 	S.Log.Debug("Connection was asked to ReadMsgUDPAddrPort, waiting for something to come in on the channel",
 		zap.String("Server ID", S.Id))
-
-	msg := <-S.ReadFrom
-	S.Log.Debug("Received message", zap.String("connection id", S.Id))
+	S.WaitCounter.Add(1)
+	var msg SimPacket
+	select {
+	case msg = <-S.ReadFrom:
+		S.Log.Debug("Received message", zap.String("connection id", S.Id), zap.Stringer("from", msg.SourceAddr))
+	case <-S.StopListening:
+		S.WaitCounter.Add(-1)
+		S.Log.Debug("Connection was closed, stopping the listener", zap.String("id", S.Id))
+		return 0, 0, 0, netip.AddrPort{}, SimConnectionError{"connection timed out"}
+	}
+	S.WaitCounter.Add(-1)
 	data := msg.B
 	if len(data) > cap(buf) {
 		S.Log.Error("Buffer passed to ReadMsgUDPAddrPort is too small",
 			zap.Int("data length", len(data)), zap.Int("buffer capacity", cap(buf)))
-		return 0, 0, 0, netip.AddrPort{}, SimConnectorError{"buffer too small"}
+		return 0, 0, 0, netip.AddrPort{}, SimConnectionError{"buffer too small"}
 	}
 	for i, item := range data {
 		buf[i] = item
@@ -115,6 +134,7 @@ func (S *SimConnection) SetDeadline(t time.Time) error {
 		}
 		S.Log.Debug("Connection timed out",
 			zap.String("conn id", S.Id), zap.Duration("after", sleepDuration))
+		S.expired = true
 		err := S.Close()
 		if err != nil {
 			S.Log.Error("Deadline sleeping did not work",
@@ -125,7 +145,6 @@ func (S *SimConnection) SetDeadline(t time.Time) error {
 }
 
 func (S *SimConnection) LocalAddr() net.Addr {
-	//TODO implement me
 	return S.LAddr
 }
 
