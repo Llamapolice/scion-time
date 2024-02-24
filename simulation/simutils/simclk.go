@@ -72,6 +72,7 @@ func (c SimClock) Adjust(offset, duration time.Duration, frequency float64) {
 
 func (c SimClock) Sleep(duration time.Duration) {
 	c.log.Debug("SimClock sleeping", zap.String("id", c.Id), zap.Duration("duration", duration))
+	// TODO maybe add a function ModifyDuration
 	unblockChan := make(chan struct{})
 	unblock := func() {
 		unblockChan <- struct{}{}

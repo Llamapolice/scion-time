@@ -417,7 +417,7 @@ func runSCIONBenchmark(daemonAddr string, localAddr, remoteAddr *snet.UDPAddr, a
 	benchmark.RunSCIONBenchmark(daemonAddr, localAddr, remoteAddr, lclk, lnet, lcrypt, authModes, ntskeServer, log)
 }
 
-func runSimulation(seed int64, configFile string) {
+func runSimulation(configFile string) {
 	simulation.RunSimulation(configFile, log)
 }
 
@@ -545,15 +545,15 @@ func main() {
 	case simulationFlags.Name():
 		err := simulationFlags.Parse(os.Args[2:])
 		if err != nil || simulationFlags.NArg() != 0 {
-			fmt.Println("NArg not 0")
+			//fmt.Println("NArg not 0")
 			exitWithUsage()
 		}
 		if configFile == "" {
-			fmt.Println("configFile empty?")
+			//fmt.Println("configFile empty?")
 			exitWithUsage()
 		}
 		initLogger(true)
-		runSimulation(seed, configFile)
+		runSimulation(configFile)
 	case serverFlags.Name():
 		err := serverFlags.Parse(os.Args[2:])
 		if err != nil || serverFlags.NArg() != 0 {

@@ -351,6 +351,13 @@ func RunSimulation(configFile string, logger *zap.Logger) {
 	select {}
 }
 
+func checkEmptyAuthMode(cfg *SimSvcConfig) {
+	if len(cfg.AuthModes) > 0 {
+		log.Warn("Auth modes are currently not supported by the simulation, will be ignored")
+	}
+	cfg.AuthModes = cfg.AuthModes[:0]
+}
+
 func pauseSetUp(instance SimSvcConfig, instanceType string, i int) {
 	unblockChan := make(chan struct{})
 	waitDuration, err := time.ParseDuration(instance.DelayAfterStart)
@@ -365,12 +372,14 @@ func pauseSetUp(instance SimSvcConfig, instanceType string, i int) {
 	<-unblockChan
 	close(unblockChan)
 	log.Debug("removing waiter in setup for " + instanceType)
-	ExpectedWaitQueueSize.Add(-1)
+	//ExpectedWaitQueueSize.Add(-1)
 }
 
 func runTool(i int, tool SimSvcConfig) {
 	id := "tool_" + strconv.Itoa(i)
 	ctxClient := context.Background()
+
+	checkEmptyAuthMode(&tool)
 
 	lclk := simutils.NewSimulationClock(log, id, NOPModifyTime, timeRequests, waitRequests, ExpectedWaitQueueSize)
 
@@ -417,6 +426,8 @@ func clientSetUp(i int, clnt SimSvcConfig) Client {
 	tmp := newClient(receiver)
 	tmp.Id += strconv.Itoa(i)
 
+	checkEmptyAuthMode(&clnt)
+
 	simClk := simutils.NewSimulationClock(log, tmp.Id, NOPModifyTime, timeRequests, waitRequests, ExpectedWaitQueueSize)
 	tmp.LocalClk = simClk
 
@@ -460,6 +471,8 @@ func relaySetUp(i int, relay SimSvcConfig) Relay {
 	tmp := newRelay(receiver)
 	tmp.Id = tmp.Id + strconv.Itoa(i)
 
+	checkEmptyAuthMode(&relay)
+
 	simClk := simutils.NewSimulationClock(log, tmp.Id, NOPModifyTime, timeRequests, waitRequests, ExpectedWaitQueueSize)
 	tmp.LocalClk = simClk
 
@@ -502,6 +515,8 @@ func serverSetUp(i int, simServer SimSvcConfig) Server {
 	log.Debug("\u001B[34mSetting up server\u001B[0m", zap.Int("server", i))
 	tmp := newServer(receiver)
 	tmp.Id = tmp.Id + strconv.Itoa(i)
+
+	checkEmptyAuthMode(&simServer)
 
 	simClk := simutils.NewSimulationClock(log, tmp.Id, NOPModifyTime, timeRequests, waitRequests, ExpectedWaitQueueSize)
 	tmp.LocalClk = simClk
