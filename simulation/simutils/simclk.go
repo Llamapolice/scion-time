@@ -13,7 +13,7 @@ import (
 
 type SimClock struct {
 	Id                    string
-	log                   *zap.Logger
+	Log                   *zap.Logger
 	ModifyTime            func(time time.Time) time.Time
 	epoch                 uint64
 	timeRequest           chan TimeRequest
@@ -24,7 +24,7 @@ type SimClock struct {
 func NewSimulationClock(log *zap.Logger, id string, ModifyTime func(t time.Time) time.Time, timeRequest chan TimeRequest, waitRequest chan WaitRequest, ExpectedWaitQueueSize *atomic.Int32) *SimClock {
 	return &SimClock{
 		Id:                    id + "_clk",
-		log:                   log,
+		Log:                   log,
 		ModifyTime:            ModifyTime,
 		timeRequest:           timeRequest,
 		WaitRequest:           waitRequest,
@@ -53,14 +53,14 @@ func (c SimClock) MaxDrift(duration time.Duration) time.Duration {
 func (c SimClock) Step(offset time.Duration) {
 	// epoch part copied from sysclk_linux.go, not 100% what that does but probably not necessary
 	if c.epoch == math.MaxUint64 {
-		c.log.Error("SimClock.Step() has been called MaxUint64 times, should never be the case")
+		c.Log.Error("SimClock.Step() has been called MaxUint64 times, should never be the case")
 		panic("epoch overflow")
 	}
 	c.epoch++
 }
 
 func (c SimClock) Adjust(offset, duration time.Duration, frequency float64) {
-	c.log.Debug(
+	c.Log.Debug(
 		"Adjusting SimClock (currently NOP)",
 		zap.String("clock id", c.Id),
 		zap.Duration("offset", offset),
@@ -71,7 +71,7 @@ func (c SimClock) Adjust(offset, duration time.Duration, frequency float64) {
 }
 
 func (c SimClock) Sleep(duration time.Duration) {
-	c.log.Debug("SimClock sleeping", zap.String("id", c.Id), zap.Duration("duration", duration))
+	c.Log.Debug("SimClock sleeping", zap.String("id", c.Id), zap.Duration("duration", duration))
 	// TODO maybe add a function ModifyDuration
 	unblockChan := make(chan struct{})
 	unblock := func() {

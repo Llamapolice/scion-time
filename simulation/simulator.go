@@ -29,10 +29,12 @@ var DefineDefaultLatency = func(_ *net.UDPAddr) time.Duration { return 2 * time.
 var NOPModifyTime = func(t time.Time) time.Time { return t }
 
 type SimConfigFile struct {
-	Servers []SimSvcConfig `toml:"servers"`
-	Relays  []SimSvcConfig `toml:"relays"`
-	Clients []SimSvcConfig `toml:"clients"`
-	Tools   []SimSvcConfig `toml:"tools"`
+	TimeHandlerWaitDuration string         `toml:"time_handler_wait_duration"`
+	TimeHandlerSpinAmount   int            `toml:"time_handler_spin_amount"`
+	Servers                 []SimSvcConfig `toml:"servers"`
+	Relays                  []SimSvcConfig `toml:"relays"`
+	Clients                 []SimSvcConfig `toml:"clients"`
+	Tools                   []SimSvcConfig `toml:"tools"`
 }
 
 type SimSvcConfig struct {
@@ -127,6 +129,8 @@ var (
 	simConnectors         []*simutils.SimConnector
 	ExpectedWaitQueueSize *atomic.Int32
 	waitingConnections    *atomic.Int32
+	loopWaitDuration      time.Duration
+	loopSpinAmount        int
 	scanner               *bufio.Scanner
 	timeRequests          chan simutils.TimeRequest
 	waitRequests          chan simutils.WaitRequest
@@ -141,6 +145,16 @@ func RunSimulation(configFile string, logger *zap.Logger) {
 	log.Debug("Reading config file", zap.String("config location", configFile))
 	var cfg SimConfigFile
 	core.LoadConfig(&cfg, configFile, log)
+
+	// Set up time handler config
+	var err error
+	loopWaitDuration, err = time.ParseDuration(cfg.TimeHandlerWaitDuration)
+	if err != nil {
+		log.Warn("time_handler_wait_duration failed to parse, falling back to default 5 ms", zap.Error(err))
+		loopWaitDuration = 5 * time.Millisecond
+	}
+	loopSpinAmount = cfg.TimeHandlerSpinAmount
+	log.Info("Time handler configuration", zap.Duration("loop wait duration", loopWaitDuration), zap.Int("loop spin amount", loopSpinAmount))
 
 	// Set up file package vars
 	simConnectors = make([]*simutils.SimConnector, 0, len(cfg.Clients)+len(cfg.Relays)+len(cfg.Servers)+len(cfg.Tools))
@@ -204,6 +218,7 @@ func RunSimulation(configFile string, logger *zap.Logger) {
 	go func() {
 		log.Info("Time handler started")
 		now := time.Unix(10000, 0)
+		loopsWaiting := 0
 		currentlyWaiting := make([]simutils.WaitRequest, 0, maxNumberOfInstances)
 		timeRequests = make(chan simutils.TimeRequest)
 		waitRequests = make(chan simutils.WaitRequest)
@@ -211,15 +226,18 @@ func RunSimulation(configFile string, logger *zap.Logger) {
 		for {
 			select {
 			case req := <-timeRequests:
-				log.Debug("Time has been requested", zap.String("by", req.Id))
+				log.Debug("Time has been requested", zap.String("by", req.Id), zap.Time("time", now))
+				loopsWaiting = 0
 				req.ReturnChan <- now
 			case req := <-waitRequests:
-				log.Debug("Wait has been requested", zap.String("by", req.Id), zap.Duration("duration", req.SleepDuration))
+				log.Debug("Wait has been requested", zap.String("by", req.Id), zap.Time("at", now), zap.Duration("duration", req.SleepDuration))
+				loopsWaiting = 0
 				currentlyWaiting = append(currentlyWaiting, req)
 			case req := <-deadlineRequests:
 				ExpectedWaitQueueSize.Add(1)
 				log.Debug("Deadline has been requested", zap.String("by", req.Id))
 				log.Debug("adding waiter deadline request")
+				loopsWaiting = 0
 				req.RequestTime = now
 				duration := req.Deadline.Sub(req.RequestTime)
 				waitForDeadline := simutils.WaitRequest{
@@ -233,28 +251,31 @@ func RunSimulation(configFile string, logger *zap.Logger) {
 				}
 				currentlyWaiting = append(currentlyWaiting, waitForDeadline)
 			default:
-				time.Sleep(time.Second / 2) // TODO just for development
+				time.Sleep(loopWaitDuration) // TODO just for development
 				if len(currentlyWaiting) >= 0 {
-					log.Info(
-						"\u001B[41m======== TIME HANDLER ========\u001B[0m",
-						zap.Int("waiting sleepers", len(currentlyWaiting)),
-						zap.Int32("waiting connections", waitingConnections.Load()),
-						zap.Int32("expected to wait", ExpectedWaitQueueSize.Load()),
-					)
-					if len(currentlyWaiting)+int(waitingConnections.Load()) < int(ExpectedWaitQueueSize.Load()) { // TODO how to adjust this number dynamically?
+					loopsWaiting += 1
+					//log.Info(
+					//	"\u001B[41m======== TIME HANDLER ========\u001B[0m",
+					//	zap.Int("waited for", loopsWaiting),
+					//	zap.Int("waiting sleepers", len(currentlyWaiting)),
+					//	zap.Int32("waiting connections", waitingConnections.Load()),
+					//	zap.Int32("expected to wait", ExpectedWaitQueueSize.Load()),
+					//)
+					//if len(currentlyWaiting)+int(waitingConnections.Load()) < int(ExpectedWaitQueueSize.Load()) { // TODO how to adjust this number dynamically?
+					if loopsWaiting <= loopSpinAmount {
 						continue
 					}
-					log.Info("When this message appears, 'waiting sleepers' + 'waiting connections' should be exactly equal to 'expected to wait'")
-					log.Info("And when you enter w, nothing should happen until this log message appears again")
-					log.Info("Enter 'w' to wait one loop for other goroutines or enter 'p' to process the next request in the queue (q for os.Exit(0))")
-					scanner.Scan()
-					if scanner.Text() == "q" {
-						os.Exit(0)
-					}
-					if scanner.Text() != "p" {
-						continue
-					}
-					log.Info("Handling the next waiting request")
+					loopsWaiting = 0
+					//log.Info("When this message appears, 'waiting sleepers' + 'waiting connections' should be exactly equal to 'expected to wait'")
+					//log.Info("And when you enter w, nothing should happen until this log message appears again")
+					//log.Info("Enter 'w' to wait one loop for other goroutines or enter 'p' to process the next request in the queue (q for os.Exit(0))")
+					//scanner.Scan()
+					//if scanner.Text() == "q" {
+					//	os.Exit(0)
+					//}
+					//if scanner.Text() != "p" {
+					//	continue
+					//}
 					minDuration := time.Hour
 					minIndex := 10000000
 					for i, request := range currentlyWaiting {
@@ -263,10 +284,15 @@ func RunSimulation(configFile string, logger *zap.Logger) {
 							minDuration = request.SleepDuration
 						}
 					}
+					log.Info("\u001B[41mHandling the next waiting request\u001B[0m", zap.Duration("after (simulated time)", minDuration))
 					shortestRequest := currentlyWaiting[minIndex]
 					currentlyWaiting = append(currentlyWaiting[:minIndex], currentlyWaiting[minIndex+1:]...)
-					for _, request := range currentlyWaiting {
-						request.SleepDuration -= minDuration
+					for i := range currentlyWaiting {
+						if currentlyWaiting[i].SleepDuration > minDuration {
+							currentlyWaiting[i].SleepDuration -= minDuration
+						} else {
+							currentlyWaiting[i].SleepDuration = 0
+						}
 					}
 					now = now.Add(minDuration)
 					log.Debug("Time handler unblocks a sleeper", zap.String("id", shortestRequest.Id), zap.Time("updated time", now))
@@ -418,6 +444,7 @@ func runTool(i int, tool SimSvcConfig) {
 		}
 		log.Debug("\u001B[31mMedian Duration measured by tool\u001B[0m",
 			zap.Duration("duration", medianDuration))
+		os.Exit(0)
 	}()
 }
 

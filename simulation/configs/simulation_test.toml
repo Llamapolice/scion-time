@@ -1,3 +1,6 @@
+time_handler_wait_duration = "5ms"
+time_handler_spin_amount = 5
+
 [[servers]]
 local_address = "1-ff00:0:111,10.1.1.11"
 daemon_address =  "simDaemon11"
@@ -34,20 +37,20 @@ dscp = 63
 random_seed = 12
 delay_after_start = "12s"
 
-#[[clients]]
-#local_address = "1-ff00:0:111,10.1.1.13"
-#daemon_address = "simDaemonClient13" # 10.1.1.11:30255"
-#
-#ntp_reference_clocks = ["1-ff00:0:111,10.1.1.12:10123"]
-#
-#dscp = 63
-#
-#random_seed = 13
-#delay_after_start = "13s"
-#
-#[[tools]]
-#local_address = "1-ff00:0:111,10.1.1.20"
-#remote_address = "1-ff00:0:111,10.1.1.11:10123"
-#
-#random_seed = 20
-#delay_after_start = "20s"
+[[clients]]
+local_address = "1-ff00:0:111,10.1.1.13"
+daemon_address = "simDaemonClient13" # 10.1.1.11:30255"
+
+ntp_reference_clocks = ["1-ff00:0:111,10.1.1.12:10123"]
+
+dscp = 63
+
+random_seed = 13
+delay_after_start = "13s"
+
+[[tools]]
+local_address = "1-ff00:0:111,10.1.1.20"
+remote_address = "1-ff00:0:111,10.1.1.11:10123"
+
+random_seed = 20
+delay_after_start = "20s"

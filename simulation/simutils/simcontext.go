@@ -11,11 +11,11 @@ import (
 
 func WithTimeout(simClock *SimClock, timeout time.Duration) (context.Context, func()) {
 	simClock.ExpectedWaitQueueSize.Add(1)
-	simClock.log.Debug("context created")
+	simClock.Log.Debug("context created")
 	atomicFalse := atomic.Bool{}
 	atomicFalse.Store(false)
 	c := &CustomContext{
-		log:       simClock.log,
+		log:       simClock.Log,
 		deadline:  simClock.Now().Add(timeout),
 		lclk:      simClock,
 		canceled:  &atomicFalse,
