@@ -265,8 +265,12 @@ func RunSimulation(configFile string, logger *zap.Logger) {
 					}
 					shortestRequest := currentlyWaiting[minIndex]
 					currentlyWaiting = append(currentlyWaiting[:minIndex], currentlyWaiting[minIndex+1:]...)
-					for _, request := range currentlyWaiting {
-						request.SleepDuration -= minDuration
+					for i := range currentlyWaiting {
+						if currentlyWaiting[i].SleepDuration > minDuration {
+							currentlyWaiting[i].SleepDuration -= minDuration
+						} else {
+							currentlyWaiting[i].SleepDuration = 0
+						}
 					}
 					now = now.Add(minDuration)
 					log.Debug("Time handler unblocks a sleeper", zap.String("id", shortestRequest.Id), zap.Time("updated time", now))
