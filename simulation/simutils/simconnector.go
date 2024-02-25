@@ -2,7 +2,7 @@ package simutils
 
 import (
 	"context"
-	"example.com/scion-time/base/netprovider"
+	"example.com/scion-time/base/netbase"
 	"github.com/scionproto/scion/pkg/addr"
 	"github.com/scionproto/scion/pkg/daemon"
 	"github.com/scionproto/scion/pkg/drkey"
@@ -190,7 +190,7 @@ func NewSimConnector(
 	}
 }
 
-func (s *SimConnector) ListenUDP(network string, laddr_orig *net.UDPAddr) (netprovider.Connection, error) {
+func (s *SimConnector) ListenUDP(network string, laddr_orig *net.UDPAddr) (netbase.Connection, error) {
 	s.log.Info("Opening a sim connection, adding waiter")
 	s.totalWaiters.Add(1)
 	laddr := *laddr_orig
@@ -232,14 +232,14 @@ func (s *SimConnector) ListenUDP(network string, laddr_orig *net.UDPAddr) (netpr
 	return simConn, nil
 }
 
-func (s *SimConnector) EnableTimestamping(n netprovider.Connection, localhostIface string) error {
+func (s *SimConnector) EnableTimestamping(n netbase.Connection, localhostIface string) error {
 	if _, ok := n.(*SimConnection); !ok {
 		s.log.Fatal("SimConnector method EnableTimestamping called on a non-simulated connection")
 	}
 	return nil
 }
 
-func (s *SimConnector) SetDSCP(n netprovider.Connection, dscp uint8) error {
+func (s *SimConnector) SetDSCP(n netbase.Connection, dscp uint8) error {
 	sconn, ok := n.(*SimConnection)
 	if !ok {
 		s.log.Fatal("SimConnector method SetDSCP called on a non-simulated connection")
@@ -249,7 +249,7 @@ func (s *SimConnector) SetDSCP(n netprovider.Connection, dscp uint8) error {
 	return nil
 }
 
-func (s *SimConnector) ReadTXTimestamp(n netprovider.Connection) (time.Time, uint32, error) {
+func (s *SimConnector) ReadTXTimestamp(n netbase.Connection) (time.Time, uint32, error) {
 	// Just return error, upstreams will find another one
 	sconn, ok := n.(*SimConnection)
 	if !ok {
@@ -259,8 +259,8 @@ func (s *SimConnector) ReadTXTimestamp(n netprovider.Connection) (time.Time, uin
 	return time.Time{}, 0, SimConnectorError{errString: sconn.Id + " is a simulated connection, find another timestamp"}
 }
 
-func (s *SimConnector) ListenPacket(network string, address string) (netprovider.Connection, error) {
+func (s *SimConnector) ListenPacket(network string, address string) (netbase.Connection, error) {
 	panic("Multiple server goroutines listening on same port not supported by the simulator")
 }
 
-var _ netprovider.ConnProvider = (*SimConnector)(nil)
+var _ netbase.ConnProvider = (*SimConnector)(nil)

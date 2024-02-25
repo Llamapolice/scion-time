@@ -49,7 +49,7 @@ func TestTimeserviceNTSChrony(t *testing.T) {
 	cryptocore.RegisterCrypto(lcrypt)
 
 	lnet := &networking.UDPConnector{}
-	netcore.RegisterNetProvider(lnet)
+	netcore.RegisterConnProvider(lnet)
 
 	laddr := localAddrSnet.Host
 	raddr := remoteAddrSnet.Host

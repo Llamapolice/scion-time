@@ -2,7 +2,7 @@ package scion
 
 import (
 	"context"
-	"example.com/scion-time/base/netprovider"
+	"example.com/scion-time/base/netbase"
 	"sync"
 	"time"
 
@@ -63,7 +63,7 @@ func update(ctx context.Context, p *Pather, dc daemon.Connector, dstIAs []addr.I
 	p.mu.Unlock()
 }
 
-func StartPather(ctx context.Context, log *zap.Logger, lnet netprovider.ConnProvider, daemonAddr string, dstIAs []addr.IA) *Pather {
+func StartPather(ctx context.Context, log *zap.Logger, lnet netbase.ConnProvider, daemonAddr string, dstIAs []addr.IA) *Pather {
 	p := &Pather{log: log}
 	// Hooked in here to be able to catch simulations and serve a modified connector
 	dc := lnet.NewDaemonConnector(ctx, daemonAddr)

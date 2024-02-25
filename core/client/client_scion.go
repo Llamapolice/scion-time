@@ -3,7 +3,7 @@ package client
 import (
 	"context"
 	"crypto/subtle"
-	"example.com/scion-time/base/netprovider"
+	"example.com/scion-time/base/netbase"
 	"example.com/scion-time/base/timebase"
 	"net"
 	"net/netip"
@@ -33,7 +33,7 @@ import (
 
 type SCIONClient struct {
 	Lclk               timebase.LocalClock
-	ConnectionProvider netprovider.ConnProvider
+	ConnectionProvider netbase.ConnProvider
 	DSCP               uint8
 	InterleavedMode    bool
 	Auth               struct {

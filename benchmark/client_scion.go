@@ -4,7 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"example.com/scion-time/base/cryptobase"
-	"example.com/scion-time/base/netprovider"
+	"example.com/scion-time/base/netbase"
 	"example.com/scion-time/base/timebase"
 	"net"
 	"os"
@@ -27,7 +27,7 @@ func RunSCIONBenchmark(
 	daemonAddr string,
 	localAddr, remoteAddr *snet.UDPAddr,
 	lclk timebase.LocalClock,
-	lnet netprovider.ConnProvider,
+	lnet netbase.ConnProvider,
 	lcrypt cryptobase.CryptoProvider,
 	authModes []string,
 	ntskeServer string,

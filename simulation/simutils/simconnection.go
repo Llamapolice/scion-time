@@ -1,7 +1,7 @@
 package simutils
 
 import (
-	"example.com/scion-time/base/netprovider"
+	"example.com/scion-time/base/netbase"
 	"go.uber.org/zap"
 	"net"
 	"net/netip"
@@ -148,4 +148,4 @@ func (S *SimConnection) LocalAddr() net.Addr {
 	return S.LAddr
 }
 
-var _ netprovider.Connection = (*SimConnection)(nil)
+var _ netbase.Connection = (*SimConnection)(nil)

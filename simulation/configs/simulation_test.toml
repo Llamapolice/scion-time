@@ -2,7 +2,7 @@
 local_address = "1-ff00:0:111,10.1.1.11"
 daemon_address =  "simDaemon11"
 
-mbg_reference_clocks = []#"simRefClk11"]
+mbg_reference_clocks = ["simRefClk11"]
 ntp_reference_clocks = []
 scion_peers = ["1-ff00:0:111,10.1.1.12:10123"]
 auth_modes = ["spao"]
@@ -20,7 +20,7 @@ delay_after_start = "11s"
 local_address = "1-ff00:0:111,10.1.1.12"
 daemon_address = "simDaemon12"
 
-mbg_reference_clocks = [] # "/sim/simRefClk12"]
+mbg_reference_clocks = ["simRefClk12"]
 ntp_reference_clocks = []
 scion_peers = ["1-ff00:0:111,10.1.1.11:10123"]
 auth_modes = ["spao"]

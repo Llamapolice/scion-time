@@ -3,7 +3,7 @@ package server
 import (
 	"context"
 	"crypto/subtle"
-	"example.com/scion-time/base/netprovider"
+	"example.com/scion-time/base/netbase"
 	"example.com/scion-time/base/timebase"
 	"net"
 	"net/netip"
@@ -73,8 +73,8 @@ func runSCIONServer(
 	log *zap.Logger,
 	mtrcs *scionServerMetrics,
 	lclk timebase.LocalClock,
-	lnet netprovider.ConnProvider,
-	conn netprovider.Connection,
+	lnet netbase.ConnProvider,
+	conn netbase.Connection,
 	localHostIface string,
 	localHostPort int,
 	dscp uint8,
@@ -482,7 +482,7 @@ func StartSCIONServer(
 	ctx context.Context,
 	log *zap.Logger,
 	lclk timebase.LocalClock,
-	lnet netprovider.ConnProvider,
+	lnet netbase.ConnProvider,
 	daemonAddr string,
 	localHost *net.UDPAddr,
 	dscp uint8,
@@ -525,7 +525,7 @@ func StartSCIONServer(
 			if err != nil {
 				log.Fatal("failed to listen for packets", zap.Error(err))
 			}
-			go runSCIONServer(ctx, log, mtrcs, lclk, lnet, conn.(netprovider.Connection), localHost.Zone, localHostPort, dscp, fetcher, provider)
+			go runSCIONServer(ctx, log, mtrcs, lclk, lnet, conn.(netbase.Connection), localHost.Zone, localHostPort, dscp, fetcher, provider)
 		}
 	}
 }
@@ -534,7 +534,7 @@ func StartSCIONDispatcher(
 	ctx context.Context,
 	log *zap.Logger,
 	lclk timebase.LocalClock,
-	lnet netprovider.ConnProvider,
+	lnet netbase.ConnProvider,
 	localHost *net.UDPAddr,
 ) {
 	log.Info("dispatcher listening via SCION",

@@ -150,7 +150,7 @@ func runServer(configFile string) {
 	cryptocore.RegisterCrypto(lcrypt)
 
 	lnet := &networking.UDPConnector{Log: log}
-	netcore.RegisterNetProvider(lnet)
+	netcore.RegisterConnProvider(lnet)
 
 	localAddr.Host.Port = 0
 	refClocks, netClocks := core.CreateClocks(cfg, localAddr, lclk, lnet, lcrypt, log)
@@ -195,7 +195,7 @@ func runRelay(configFile string) {
 	cryptocore.RegisterCrypto(lcrypt)
 
 	lnet := &networking.UDPConnector{Log: log}
-	netcore.RegisterNetProvider(lnet)
+	netcore.RegisterConnProvider(lnet)
 
 	localAddr.Host.Port = 0
 	refClocks, netClocks := core.CreateClocks(cfg, localAddr, lclk, lnet, lcrypt, log)
@@ -239,7 +239,7 @@ func runClient(configFile string) {
 	cryptocore.RegisterCrypto(lcrypt)
 
 	lnet := &networking.UDPConnector{Log: log}
-	netcore.RegisterNetProvider(lnet)
+	netcore.RegisterConnProvider(lnet)
 
 	localAddr.Host.Port = 0
 	refClocks, netClocks := core.CreateClocks(cfg, localAddr, lclk, lnet, lcrypt, log)
@@ -280,7 +280,7 @@ func runIPTool(localAddr, remoteAddr *snet.UDPAddr, dscp uint8,
 	cryptocore.RegisterCrypto(lcrypt)
 
 	lnet := &networking.UDPConnector{Log: log}
-	netcore.RegisterNetProvider(lnet)
+	netcore.RegisterConnProvider(lnet)
 
 	laddr := localAddr.Host
 	raddr := remoteAddr.Host
@@ -319,7 +319,7 @@ func runSCIONTool(daemonAddr, dispatcherMode string, localAddr, remoteAddr *snet
 	cryptocore.RegisterCrypto(lcrypt)
 
 	lnet := &networking.UDPConnector{Log: log}
-	netcore.RegisterNetProvider(lnet)
+	netcore.RegisterConnProvider(lnet)
 
 	if dispatcherMode == dispatcherModeInternal {
 		server.StartSCIONDispatcher(ctx, log, lclk, lnet, snet.CopyUDPAddr(localAddr.Host))
@@ -399,7 +399,7 @@ func runIPBenchmark(localAddr, remoteAddr *snet.UDPAddr, authModes []string, nts
 	cryptocore.RegisterCrypto(lcrypt)
 
 	lnet := &networking.UDPConnector{Log: zap.NewNop()}
-	netcore.RegisterNetProvider(lnet)
+	netcore.RegisterConnProvider(lnet)
 
 	benchmark.RunIPBenchmark(localAddr.Host, remoteAddr.Host, lclk, lnet, authModes, ntskeServer, log)
 }
@@ -412,7 +412,7 @@ func runSCIONBenchmark(daemonAddr string, localAddr, remoteAddr *snet.UDPAddr, a
 	cryptocore.RegisterCrypto(lcrypt)
 
 	lnet := &networking.UDPConnector{Log: zap.NewNop()}
-	netcore.RegisterNetProvider(lnet)
+	netcore.RegisterConnProvider(lnet)
 
 	benchmark.RunSCIONBenchmark(daemonAddr, localAddr, remoteAddr, lclk, lnet, lcrypt, authModes, ntskeServer, log)
 }

@@ -536,9 +536,9 @@ func serverSetUp(i int, simServer SimSvcConfig) Server {
 	tmp.SyncClks = syncClks
 	if len(refClocks) != 0 {
 		log.Debug("Found reference clocks, adding waiters", zap.Int("amount", len(refClocks)))
-		ExpectedWaitQueueSize.Add(int32(len(refClocks)))
+		//ExpectedWaitQueueSize.Add(int32(len(refClocks)))
 		sync.SyncToRefClocks(log, simClk, syncClks)
-		ExpectedWaitQueueSize.Add(int32(-len(refClocks)))
+		//ExpectedWaitQueueSize.Add(int32(-len(refClocks)))
 		go sync.RunLocalClockSync(log, simClk, syncClks)
 	}
 

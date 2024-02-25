@@ -2,7 +2,7 @@ package networking
 
 import (
 	"context"
-	"example.com/scion-time/base/netprovider"
+	"example.com/scion-time/base/netbase"
 	"example.com/scion-time/net/scion"
 	"example.com/scion-time/net/udp"
 	"github.com/libp2p/go-reuseport"
@@ -20,25 +20,25 @@ func (U *UDPConnector) NewDaemonConnector(ctx context.Context, daemonAddr string
 	return scion.NewDaemonConnector(ctx, daemonAddr)
 }
 
-func (U *UDPConnector) ListenUDP(network string, laddr *net.UDPAddr) (netprovider.Connection, error) {
+func (U *UDPConnector) ListenUDP(network string, laddr *net.UDPAddr) (netbase.Connection, error) {
 	return net.ListenUDP(network, laddr)
 }
 
-func (U *UDPConnector) EnableTimestamping(n netprovider.Connection, localHostIface string) error {
+func (U *UDPConnector) EnableTimestamping(n netbase.Connection, localHostIface string) error {
 	return udp.EnableTimestamping(n.(*net.UDPConn), localHostIface)
 }
 
-func (U *UDPConnector) SetDSCP(n netprovider.Connection, dscp uint8) error {
+func (U *UDPConnector) SetDSCP(n netbase.Connection, dscp uint8) error {
 	return udp.SetDSCP(n.(*net.UDPConn), dscp)
 }
 
-func (U *UDPConnector) ReadTXTimestamp(n netprovider.Connection) (time.Time, uint32, error) {
+func (U *UDPConnector) ReadTXTimestamp(n netbase.Connection) (time.Time, uint32, error) {
 	return udp.ReadTXTimestamp(n.(*net.UDPConn))
 }
 
-func (U *UDPConnector) ListenPacket(network string, address string) (netprovider.Connection, error) {
+func (U *UDPConnector) ListenPacket(network string, address string) (netbase.Connection, error) {
 	conn, err := reuseport.ListenPacket(network, address)
-	return conn.(netprovider.Connection), err
+	return conn.(netbase.Connection), err
 }
 
-var _ netprovider.ConnProvider = (*UDPConnector)(nil)
+var _ netbase.ConnProvider = (*UDPConnector)(nil)

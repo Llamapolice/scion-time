@@ -1,4 +1,4 @@
-package netprovider
+package netbase
 
 import (
 	"context"
@@ -7,10 +7,6 @@ import (
 	"net/netip"
 	"time"
 )
-
-//type Connection struct {
-//	net.UDPConn
-//}
 
 type Connection interface {
 	Close() error

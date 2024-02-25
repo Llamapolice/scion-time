@@ -5,7 +5,7 @@ import (
 	"context"
 	"crypto/tls"
 	"example.com/scion-time/base/cryptobase"
-	"example.com/scion-time/base/netprovider"
+	"example.com/scion-time/base/netbase"
 	"example.com/scion-time/base/timebase"
 	"example.com/scion-time/core/client"
 	"example.com/scion-time/driver/mbg"
@@ -109,7 +109,7 @@ func CreateClocks(
 	cfg SvcConfig,
 	localAddr *snet.UDPAddr,
 	lclk timebase.LocalClock,
-	lnet netprovider.ConnProvider,
+	lnet netbase.ConnProvider,
 	lcrypt cryptobase.CryptoProvider,
 	log *zap.Logger,
 ) (
@@ -291,7 +291,7 @@ func NewNTPReferenceClockSCION(
 	daemonAddr string,
 	localAddr, remoteAddr udp.UDPAddr,
 	lclk timebase.LocalClock,
-	lnet netprovider.ConnProvider,
+	lnet netbase.ConnProvider,
 	lcrypt cryptobase.CryptoProvider,
 	dscp uint8,
 	authModes []string,
@@ -321,7 +321,7 @@ func NewNTPReferenceClockSCION(
 func NewNTPReferenceClockIP(
 	localAddr, remoteAddr *net.UDPAddr,
 	lclk timebase.LocalClock,
-	connprov netprovider.ConnProvider,
+	connprov netbase.ConnProvider,
 	dscp uint8,
 	authModes []string,
 	ntskeServer string,

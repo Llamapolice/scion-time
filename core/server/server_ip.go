@@ -2,7 +2,7 @@ package server
 
 import (
 	"context"
-	"example.com/scion-time/base/netprovider"
+	"example.com/scion-time/base/netbase"
 	"example.com/scion-time/base/timebase"
 	"net"
 	"strconv"
@@ -52,8 +52,8 @@ func runIPServer(
 	log *zap.Logger,
 	mtrcs *ipServerMetrics,
 	lclk timebase.LocalClock,
-	lnet netprovider.ConnProvider,
-	conn netprovider.Connection,
+	lnet netbase.ConnProvider,
+	conn netbase.Connection,
 	iface string,
 	dscp uint8,
 	provider *ntske.Provider,
@@ -214,7 +214,7 @@ func StartIPServer(
 	ctx context.Context,
 	log *zap.Logger,
 	lclk timebase.LocalClock,
-	lnet netprovider.ConnProvider,
+	lnet netbase.ConnProvider,
 	localHost *net.UDPAddr,
 	dscp uint8,
 	provider *ntske.Provider,
@@ -239,7 +239,7 @@ func StartIPServer(
 			if err != nil {
 				log.Fatal("failed to listen for packets", zap.Error(err))
 			}
-			go runIPServer(log, mtrcs, lclk, lnet, conn.(netprovider.Connection), localHost.Zone, dscp, provider)
+			go runIPServer(log, mtrcs, lclk, lnet, conn.(netbase.Connection), localHost.Zone, dscp, provider)
 		}
 	}
 }
