@@ -39,9 +39,9 @@ type TimeRequest struct {
 }
 
 type WaitRequest struct {
-	Id            string
-	SleepDuration time.Duration
-	Action        func()
+	Id           string
+	WaitDuration time.Duration
+	Action       func()
 	//Unblock       chan interface{}
 }
 

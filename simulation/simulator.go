@@ -197,9 +197,9 @@ func RunSimulation(configFile string, logger *zap.Logger) {
 						)
 					}
 					waitRequests <- simutils.WaitRequest{
-						Id:            simConn.Id + "_msg",
-						SleepDuration: msg.Latency,
-						Action:        passOn,
+						Id:           simConn.Id + "_msg",
+						WaitDuration: msg.Latency,
+						Action:       passOn,
 					}
 					continue skip
 				}
@@ -230,7 +230,7 @@ func RunSimulation(configFile string, logger *zap.Logger) {
 				loopsWaiting = 0
 				req.ReturnChan <- now
 			case req := <-waitRequests:
-				log.Debug("Wait has been requested", zap.String("by", req.Id), zap.Time("at", now), zap.Duration("duration", req.SleepDuration))
+				log.Debug("Wait has been requested", zap.String("by", req.Id), zap.Time("at", now), zap.Duration("duration", req.WaitDuration))
 				loopsWaiting = 0
 				currentlyWaiting = append(currentlyWaiting, req)
 			case req := <-deadlineRequests:
@@ -241,8 +241,8 @@ func RunSimulation(configFile string, logger *zap.Logger) {
 				req.RequestTime = now
 				duration := req.Deadline.Sub(req.RequestTime)
 				waitForDeadline := simutils.WaitRequest{
-					Id:            req.Id,
-					SleepDuration: duration,
+					Id:           req.Id,
+					WaitDuration: duration,
 					Action: func() {
 						log.Debug("removing waiter deadline request")
 						req.Unblock <- duration
@@ -279,19 +279,19 @@ func RunSimulation(configFile string, logger *zap.Logger) {
 					minDuration := time.Hour
 					minIndex := 10000000
 					for i, request := range currentlyWaiting {
-						if request.SleepDuration < minDuration {
+						if request.WaitDuration < minDuration {
 							minIndex = i
-							minDuration = request.SleepDuration
+							minDuration = request.WaitDuration
 						}
 					}
 					log.Info("\u001B[41mHandling the next waiting request\u001B[0m", zap.Duration("after (simulated time)", minDuration))
 					shortestRequest := currentlyWaiting[minIndex]
 					currentlyWaiting = append(currentlyWaiting[:minIndex], currentlyWaiting[minIndex+1:]...)
 					for i := range currentlyWaiting {
-						if currentlyWaiting[i].SleepDuration > minDuration {
-							currentlyWaiting[i].SleepDuration -= minDuration
+						if currentlyWaiting[i].WaitDuration > minDuration {
+							currentlyWaiting[i].WaitDuration -= minDuration
 						} else {
-							currentlyWaiting[i].SleepDuration = 0
+							currentlyWaiting[i].WaitDuration = 0
 						}
 					}
 					now = now.Add(minDuration)
@@ -391,9 +391,9 @@ func pauseSetUp(instance SimSvcConfig, instanceType string, i int) {
 		log.Fatal("delay_after_start failed to parse from config", zap.Int(instanceType+" number", i))
 	}
 	waitRequests <- simutils.WaitRequest{
-		Id:            "afterStartDelay_" + instanceType + strconv.Itoa(i),
-		SleepDuration: waitDuration,
-		Action:        func() { unblockChan <- struct{}{} },
+		Id:           "afterStartDelay_" + instanceType + strconv.Itoa(i),
+		WaitDuration: waitDuration,
+		Action:       func() { unblockChan <- struct{}{} },
 	}
 	<-unblockChan
 	close(unblockChan)

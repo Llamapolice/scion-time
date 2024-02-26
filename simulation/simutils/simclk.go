@@ -77,7 +77,7 @@ func (c SimClock) Sleep(duration time.Duration) {
 	unblock := func() {
 		unblockChan <- struct{}{}
 	}
-	c.WaitRequest <- WaitRequest{Id: c.Id, SleepDuration: duration, Action: unblock}
+	c.WaitRequest <- WaitRequest{Id: c.Id, WaitDuration: duration, Action: unblock}
 	<-unblockChan
 	close(unblockChan)
 }

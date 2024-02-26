@@ -24,8 +24,8 @@ func WithTimeout(simClock *SimClock, timeout time.Duration) (context.Context, fu
 		done:      atomic.Value{},
 	}
 	simClock.WaitRequest <- WaitRequest{
-		Id:            "context deadline",
-		SleepDuration: timeout,
+		Id:           "context deadline",
+		WaitDuration: timeout,
 		Action: func() {
 			c.cancel()
 			c.waitQueue.Add(-1)
