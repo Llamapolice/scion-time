@@ -12,20 +12,22 @@ import (
 )
 
 type SimClock struct {
-	Id                    string
-	Log                   *zap.Logger
-	ModifyTime            func(time time.Time) time.Time
-	epoch                 uint64
-	timeRequest           chan TimeRequest
-	WaitRequest           chan WaitRequest
-	ExpectedWaitQueueSize *atomic.Int32
+	Id                    string                                           // Identifier string, ends in "_clk"
+	Log                   *zap.Logger                                      // Logger
+	ModifyTime            func(time time.Time) time.Time                   // Called to modify the true time before returning for Now()
+	AdjustFunc            func(c *SimClock, o, d time.Duration, f float64) // Function called within Adjust() method
+	timeRequest           chan TimeRequest                                 // Channel to send TimeRequest to
+	WaitRequest           chan WaitRequest                                 // Channel to send WaitRequest to
+	epoch                 uint64                                           // Used internally for the Epoch() method
+	ExpectedWaitQueueSize *atomic.Int32                                    // TODO remove this in this branch
 }
 
-func NewSimulationClock(log *zap.Logger, id string, ModifyTime func(t time.Time) time.Time, timeRequest chan TimeRequest, waitRequest chan WaitRequest, ExpectedWaitQueueSize *atomic.Int32) *SimClock {
+func NewSimulationClock(log *zap.Logger, id string, ModifyTime func(t time.Time) time.Time, AdjustFunc func(c *SimClock, o time.Duration, d time.Duration, f float64), timeRequest chan TimeRequest, waitRequest chan WaitRequest, ExpectedWaitQueueSize *atomic.Int32) *SimClock {
 	return &SimClock{
 		Id:                    id + "_clk",
 		Log:                   log,
 		ModifyTime:            ModifyTime,
+		AdjustFunc:            AdjustFunc,
 		timeRequest:           timeRequest,
 		WaitRequest:           waitRequest,
 		ExpectedWaitQueueSize: ExpectedWaitQueueSize,
@@ -67,7 +69,7 @@ func (c SimClock) Adjust(offset, duration time.Duration, frequency float64) {
 		zap.Duration("duration", duration),
 		zap.Float64("frequency", frequency),
 	)
-	// TODO this currently does nothing, SimCLk is still in skeleton phase
+	c.AdjustFunc(&c, offset, duration, frequency)
 }
 
 func (c SimClock) Sleep(duration time.Duration) {
@@ -89,8 +91,9 @@ type SimReferenceClock struct {
 }
 
 func (s *SimReferenceClock) MeasureClockOffset(ctx context.Context, log *zap.Logger) (time.Duration, error) {
+	// TODO this is an empty implementation currently, same output as localReferenceClock
 	log.Debug("Measuring SimRefClk offset", zap.String("id", s.Id))
-	return time.Second, nil
+	return 0, nil
 }
 
 var _ client.ReferenceClock = (*SimReferenceClock)(nil)

@@ -10,39 +10,40 @@ import (
 )
 
 type SimConnection struct {
-	Log            *zap.Logger
-	Id             string // maybe change to Int but start with string for easier debugging
-	ReadFrom       chan SimPacket
-	WriteTo        chan SimPacket
-	Latency        time.Duration
-	ModifyOutgoing func(packet *SimPacket)
+	Id  string      // Identifier string
+	Log *zap.Logger // Logger
+
+	ReadFrom       chan SimPacket          // Channel this connection receives messages from
+	WriteTo        chan SimPacket          // Global channel the connection sends messages to
+	Latency        time.Duration           // The base latency this connection assigns outgoing messages
+	ModifyOutgoing func(packet *SimPacket) // Function modifying the packet before sending
 
 	// Internal usage
-	Deadline      time.Time
-	StopListening chan struct{}
+	Deadline      time.Time     // The deadline this connection has received, if applicable
+	StopListening chan struct{} // Channel to prematurely return from ReadMsgUDPAddrPort() when timed out
 	// Following are temporary, might be nice for debugging, but might change
-	DSCP uint8
+	DSCP uint8 // The connection's DSCP value. Currently not used
 	// These are used by the SimConnector to handle connections
-	Closed             bool
-	Network            string
-	LAddr              *net.UDPAddr
-	ConnectionsHandler chan RequestFromMapHandler
-	RequestDeadline    chan DeadlineRequest
-	WaitCounter        *atomic.Int32
-	expired            bool
+	Closed             bool                       // True if the connection has been closed
+	Network            string                     // Will always be "udp"
+	LAddr              *net.UDPAddr               // The address including port this connection is listening on
+	ConnectionsHandler chan RequestFromMapHandler // Channel to notify the SimConnector when closing
+	RequestDeadline    chan DeadlineRequest       // Channel to request a deadline from the time handler
+	expired            bool                       // Set to true if the connection has timed out
+	WaitCounter        *atomic.Int32              // TODO remove
 }
 
 func (S *SimConnection) Close() error {
 	if S.Closed {
 		if S.expired {
-			S.WaitCounter.Add(1)
+			S.WaitCounter.Add(1) // TODO remove
 		}
 		S.Log.Error("Trying to close already closed connection",
 			zap.String("conn id", S.Id), zap.String("conn laddr", S.LAddr.String()))
 		return nil
 	}
 	if S.expired {
-		S.WaitCounter.Add(-1)
+		S.WaitCounter.Add(-1) // TODO remove
 	}
 	S.Closed = true
 	//S.expired = false
@@ -58,14 +59,15 @@ func (S *SimConnection) Close() error {
 	S.Log.Debug("Closed simulated connection",
 		zap.String("connection id", S.Id), zap.String("network", S.Network))
 	S.StopListening <- struct{}{}
+	<-S.StopListening
+	close(S.StopListening)
 	close(S.ReadFrom)
 	return nil
 }
 
-func (S *SimConnection) Write(b []byte) (n int, err error) {
-	//TODO implement me
-	panic("Write: implement me")
-}
+//func (S *SimConnection) Write(b []byte) (n int, err error) { // TODO remove
+//	panic("Write: implement me")
+//}
 
 func (S *SimConnection) ReadMsgUDPAddrPort(buf []byte, oob []byte) (
 	n int,
@@ -84,6 +86,7 @@ func (S *SimConnection) ReadMsgUDPAddrPort(buf []byte, oob []byte) (
 	case <-S.StopListening:
 		S.WaitCounter.Add(-1)
 		S.Log.Debug("Connection was closed, stopping the listener", zap.String("id", S.Id))
+		S.StopListening <- struct{}{}
 		return 0, 0, 0, netip.AddrPort{}, SimConnectionError{"connection timed out"}
 	}
 	S.WaitCounter.Add(-1)

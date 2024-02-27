@@ -23,18 +23,23 @@ import (
 
 const maxNumberOfInstances = 30
 
-// FAKE CONSTANTS
+// "CONSTANTS"
+
 var NOPModifyMsg = func(_ *simutils.SimPacket) {}
+var NOPModifyMsgCopy = func(packet simutils.SimPacket) simutils.SimPacket {
+	return packet
+}
 var DefineDefaultLatency = func(_ *net.UDPAddr) time.Duration { return 2 * time.Millisecond }
 var NOPModifyTime = func(t time.Time) time.Time { return t }
+var NOPAdjustFunc = func(_ *simutils.SimClock, _, _ time.Duration, _ float64) {}
 
 type SimConfigFile struct {
-	TimeHandlerWaitDuration string         `toml:"time_handler_wait_duration"`
-	TimeHandlerSpinAmount   int            `toml:"time_handler_spin_amount"`
-	Servers                 []SimSvcConfig `toml:"servers"`
-	Relays                  []SimSvcConfig `toml:"relays"`
-	Clients                 []SimSvcConfig `toml:"clients"`
-	Tools                   []SimSvcConfig `toml:"tools"`
+	TimeHandlerWaitDuration  string         `toml:"time_handler_wait_duration"`
+	TimeHandlerSpinThreshold int            `toml:"time_handler_spin_threshold"`
+	Servers                  []SimSvcConfig `toml:"servers"`
+	Relays                   []SimSvcConfig `toml:"relays"`
+	Clients                  []SimSvcConfig `toml:"clients"`
+	Tools                    []SimSvcConfig `toml:"tools"`
 }
 
 type SimSvcConfig struct {
@@ -67,7 +72,7 @@ type Relay struct {
 }
 
 type instance struct {
-	// TODO, just an example for now
+	// TODO remove
 	instanceType        int8
 	malicious           int8
 	failureChance       float64
@@ -76,7 +81,7 @@ type instance struct {
 	maxFailureDuration  time.Duration
 }
 
-type connection struct {
+type connection struct { // TODO remove
 	failureChance                   float64
 	dropChance                      float64
 	duplicationChance               float64
@@ -130,7 +135,7 @@ var (
 	ExpectedWaitQueueSize *atomic.Int32
 	waitingConnections    *atomic.Int32
 	loopWaitDuration      time.Duration
-	loopSpinAmount        int
+	loopSpinThreshold     int
 	scanner               *bufio.Scanner
 	timeRequests          chan simutils.TimeRequest
 	waitRequests          chan simutils.WaitRequest
@@ -153,8 +158,8 @@ func RunSimulation(configFile string, logger *zap.Logger) {
 		log.Warn("time_handler_wait_duration failed to parse, falling back to default 5 ms", zap.Error(err))
 		loopWaitDuration = 5 * time.Millisecond
 	}
-	loopSpinAmount = cfg.TimeHandlerSpinAmount
-	log.Info("Time handler configuration", zap.Duration("loop wait duration", loopWaitDuration), zap.Int("loop spin amount", loopSpinAmount))
+	loopSpinThreshold = cfg.TimeHandlerSpinThreshold
+	log.Info("Time handler configuration", zap.Duration("loop wait duration", loopWaitDuration), zap.Int("loop spin amount", loopSpinThreshold))
 
 	// Set up file package vars
 	simConnectors = make([]*simutils.SimConnector, 0, len(cfg.Clients)+len(cfg.Relays)+len(cfg.Servers)+len(cfg.Tools))
@@ -163,9 +168,7 @@ func RunSimulation(configFile string, logger *zap.Logger) {
 	waitingConnections = &atomic.Int32{}
 
 	// Standard NOP packet modification in message handler
-	globalModifyMsg = func(packet simutils.SimPacket) simutils.SimPacket {
-		return packet
-	}
+	globalModifyMsg = NOPModifyMsgCopy
 
 	// Bare-bones message handler to pass messages around
 	go func() {
@@ -179,15 +182,16 @@ func RunSimulation(configFile string, logger *zap.Logger) {
 				zap.String("target", msg.TargetAddr.String()),
 				zap.String("source", msg.SourceAddr.String()),
 			)
-			targetAddr := msg.TargetAddr.Addr().WithZone("").Unmap()
+			// Ensure the simConn's local address and the messages target address have the same format
+			msgTargetAddr := msg.TargetAddr.Addr().WithZone("").Unmap()
 			for _, simConn := range simConnectors {
 				laddrPort := simConn.LocalAddress.Host.AddrPort()
 				simConnLocalAddress := laddrPort.Addr().WithZone("").Unmap()
-				if simConnLocalAddress == targetAddr {
+				if simConnLocalAddress == msgTargetAddr {
 					// necessary, otherwise the function will use the current simConn and msg during its execution instead of creation (what we want)
 					tmp := *simConn
 					tmpMsg := globalModifyMsg(msg)
-					passOn := func() {
+					passOn := func() { // Create a function that will pass the message into the simConn's input channel
 						tmp.Input <- tmpMsg
 						log.Debug(
 							"Passed message on to instance",
@@ -196,16 +200,16 @@ func RunSimulation(configFile string, logger *zap.Logger) {
 							zap.Duration("after", tmpMsg.Latency),
 						)
 					}
-					waitRequests <- simutils.WaitRequest{
+					waitRequests <- simutils.WaitRequest{ // Request the passOn function to be executed after the duration specified in the message
 						Id:           simConn.Id + "_msg",
 						WaitDuration: msg.Latency,
 						Action:       passOn,
 					}
-					continue skip
+					continue skip // Break out of both for loops
 				}
 			}
 			log.Warn("Targeted address does not exist (yet), message dropped",
-				zap.String("target", targetAddr.String()))
+				zap.String("target", msgTargetAddr.String()))
 			//ExpectedWaitQueueSize.Add(-1)
 		}
 		log.Info("\u001B[34mMessage handler terminating\u001B[0m")
@@ -214,7 +218,7 @@ func RunSimulation(configFile string, logger *zap.Logger) {
 	for receiver == nil {
 	} // Wait for message handler to be ready
 
-	// Sketch for a ground time provider
+	// Sketch for a time handler providing true time
 	go func() {
 		log.Info("Time handler started")
 		now := time.Unix(10000, 0)
@@ -262,7 +266,7 @@ func RunSimulation(configFile string, logger *zap.Logger) {
 					//	zap.Int32("expected to wait", ExpectedWaitQueueSize.Load()),
 					//)
 					//if len(currentlyWaiting)+int(waitingConnections.Load()) < int(ExpectedWaitQueueSize.Load()) { // TODO how to adjust this number dynamically?
-					if loopsWaiting <= loopSpinAmount {
+					if loopsWaiting <= loopSpinThreshold {
 						continue
 					}
 					loopsWaiting = 0
@@ -309,7 +313,7 @@ func RunSimulation(configFile string, logger *zap.Logger) {
 	simServers := make([]Server, len(cfg.Servers))
 
 	for i, simServer := range cfg.Servers {
-		ExpectedWaitQueueSize.Add(1)
+		ExpectedWaitQueueSize.Add(1) // TODO remove
 		log.Debug("adding waiter server setup")
 
 		tmp := serverSetUp(i, simServer)
@@ -367,21 +371,18 @@ func RunSimulation(configFile string, logger *zap.Logger) {
 		pauseSetUp(tool, "tool", i)
 	}
 
-	// Main loop of simulation
-	for condition := true; condition; {
-		// Pass messages around between instances
-		// Drop, corrupt, duplicate, kill, start, disconnect connections and instances as needed
-		condition = false
-	}
+	os.Exit(0)
 
-	select {}
 }
 
-func checkEmptyAuthMode(cfg *SimSvcConfig) {
+func ensureConfigCompatibility(cfg *SimSvcConfig) {
 	if len(cfg.AuthModes) > 0 {
 		log.Warn("Auth modes are currently not supported by the simulation, will be ignored")
 	}
 	cfg.AuthModes = cfg.AuthModes[:0]
+	for i := range cfg.MBGReferenceClocks {
+		cfg.MBGReferenceClocks[i] = "sim" + cfg.MBGReferenceClocks[i]
+	}
 }
 
 func pauseSetUp(instance SimSvcConfig, instanceType string, i int) {
@@ -405,9 +406,9 @@ func runTool(i int, tool SimSvcConfig) {
 	id := "tool_" + strconv.Itoa(i)
 	ctxClient := context.Background()
 
-	checkEmptyAuthMode(&tool)
+	ensureConfigCompatibility(&tool)
 
-	lclk := simutils.NewSimulationClock(log, id, NOPModifyTime, timeRequests, waitRequests, ExpectedWaitQueueSize)
+	lclk := simutils.NewSimulationClock(log, id, NOPModifyTime, NOPAdjustFunc, timeRequests, waitRequests, ExpectedWaitQueueSize)
 
 	var laddr udp.UDPAddr
 	var raddr udp.UDPAddr
@@ -430,22 +431,19 @@ func runTool(i int, tool SimSvcConfig) {
 	simCrypt := simutils.NewSimCrypto(tool.Seed, log)
 
 	ntpcs := []*client.SCIONClient{
-		{Lclk: lclk, ConnectionProvider: simConnector, DSCP: 0, InterleavedMode: false},
+		{Lclk: lclk, ConnectionProvider: simConnector, DSCP: 1, InterleavedMode: false},
 	}
 	ps := []snet.Path{
 		path.Path{Src: laddrSNET.IA, Dst: raddrSNET.IA, DataplanePath: path.Empty{}},
 	}
 
-	go func() { // TODO does this still need to be in a goroutine?
-		log.Debug("Tool setup complete, running offset measurement now", zap.String("id", id))
-		medianDuration, err := client.MeasureClockOffsetSCION(ctxClient, log, simCrypt, ntpcs, laddr, raddr, ps)
-		if err != nil {
-			log.Fatal("Tool had an error", zap.Error(err))
-		}
-		log.Debug("\u001B[31mMedian Duration measured by tool\u001B[0m",
-			zap.Duration("duration", medianDuration))
-		os.Exit(0)
-	}()
+	log.Debug("Tool setup complete, running offset measurement now", zap.String("id", id))
+	medianDuration, err := client.MeasureClockOffsetSCION(ctxClient, log, simCrypt, ntpcs, laddr, raddr, ps)
+	if err != nil {
+		log.Fatal("Tool had an error", zap.Error(err))
+	}
+	log.Debug("\u001B[31mMedian Duration measured by tool\u001B[0m",
+		zap.Duration("duration", medianDuration))
 }
 
 func clientSetUp(i int, clnt SimSvcConfig) Client {
@@ -453,9 +451,9 @@ func clientSetUp(i int, clnt SimSvcConfig) Client {
 	tmp := newClient(receiver)
 	tmp.Id += strconv.Itoa(i)
 
-	checkEmptyAuthMode(&clnt)
+	ensureConfigCompatibility(&clnt)
 
-	simClk := simutils.NewSimulationClock(log, tmp.Id, NOPModifyTime, timeRequests, waitRequests, ExpectedWaitQueueSize)
+	simClk := simutils.NewSimulationClock(log, tmp.Id, NOPModifyTime, NOPAdjustFunc, timeRequests, waitRequests, ExpectedWaitQueueSize)
 	tmp.LocalClk = simClk
 
 	laddr := core.LocalAddress(clnt.SvcConfig)
@@ -498,9 +496,9 @@ func relaySetUp(i int, relay SimSvcConfig) Relay {
 	tmp := newRelay(receiver)
 	tmp.Id = tmp.Id + strconv.Itoa(i)
 
-	checkEmptyAuthMode(&relay)
+	ensureConfigCompatibility(&relay)
 
-	simClk := simutils.NewSimulationClock(log, tmp.Id, NOPModifyTime, timeRequests, waitRequests, ExpectedWaitQueueSize)
+	simClk := simutils.NewSimulationClock(log, tmp.Id, NOPModifyTime, NOPAdjustFunc, timeRequests, waitRequests, ExpectedWaitQueueSize)
 	tmp.LocalClk = simClk
 
 	localAddr := core.LocalAddress(relay.SvcConfig)
@@ -543,9 +541,9 @@ func serverSetUp(i int, simServer SimSvcConfig) Server {
 	tmp := newServer(receiver)
 	tmp.Id = tmp.Id + strconv.Itoa(i)
 
-	checkEmptyAuthMode(&simServer)
+	ensureConfigCompatibility(&simServer)
 
-	simClk := simutils.NewSimulationClock(log, tmp.Id, NOPModifyTime, timeRequests, waitRequests, ExpectedWaitQueueSize)
+	simClk := simutils.NewSimulationClock(log, tmp.Id, NOPModifyTime, NOPAdjustFunc, timeRequests, waitRequests, ExpectedWaitQueueSize)
 	tmp.LocalClk = simClk
 
 	localAddr := core.LocalAddress(simServer.SvcConfig)
@@ -563,7 +561,7 @@ func serverSetUp(i int, simServer SimSvcConfig) Server {
 	tmp.SyncClks = syncClks
 	if len(refClocks) != 0 {
 		log.Debug("Found reference clocks, adding waiters", zap.Int("amount", len(refClocks)))
-		//ExpectedWaitQueueSize.Add(int32(len(refClocks)))
+		//ExpectedWaitQueueSize.Add(int32(len(refClocks))) // TODO remove
 		sync.SyncToRefClocks(log, simClk, syncClks)
 		//ExpectedWaitQueueSize.Add(int32(-len(refClocks)))
 		go sync.RunLocalClockSync(log, simClk, syncClks)

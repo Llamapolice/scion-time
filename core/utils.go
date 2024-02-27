@@ -118,6 +118,7 @@ func CreateClocks(
 
 	// this for example could be a simulated gps clock
 	// maybe implement this using something like SimReferenceClocks (also then in config)
+	// TODO is there a better way than this string comparison
 	for _, s := range cfg.MBGReferenceClocks {
 		if s[:3] == "sim" {
 			refClocks = append(refClocks, &simutils.SimReferenceClock{Id: s})

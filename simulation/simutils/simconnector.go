@@ -3,6 +3,7 @@ package simutils
 import (
 	"context"
 	"example.com/scion-time/base/netbase"
+	"example.com/scion-time/net/scion"
 	"github.com/scionproto/scion/pkg/addr"
 	"github.com/scionproto/scion/pkg/daemon"
 	"github.com/scionproto/scion/pkg/drkey"
@@ -19,7 +20,7 @@ import (
 )
 
 type SimDaemonConnector struct {
-	Ctx        context.Context
+	Ctx        context.Context // TODO remove
 	DaemonAddr string
 	CallerIA   addr.IA
 }
@@ -31,7 +32,7 @@ func (s SimDaemonConnector) LocalIA(ctx context.Context) (addr.IA, error) {
 func (s SimDaemonConnector) Paths(ctx context.Context, dst, src addr.IA, f daemon.PathReqFlags) ([]snet.Path, error) {
 	//TODO does this need more?
 	paths := []snet.Path{
-		path.Path{Src: s.CallerIA, Dst: s.CallerIA, DataplanePath: path.Empty{}},
+		path.Path{Src: src, Dst: dst, DataplanePath: path.Empty{}},
 	}
 	return paths, nil
 }
@@ -79,34 +80,23 @@ func (s SimDaemonConnector) Close() error {
 var _ daemon.Connector = (*SimDaemonConnector)(nil)
 
 type SimConnector struct {
-	Id           string
-	LocalAddress *snet.UDPAddr
-	// This channel is where all messages to this SimConnector's corresponding IP address are sent
-	Input              chan SimPacket
-	totalWaiters       *atomic.Int32
-	waitingConnections *atomic.Int32
+	Id  string      // Identifier string
+	log *zap.Logger // Logger
 
-	// Every SimConnection created by this SimConnector will apply this function to messages before passing it to the handler
-	ModifyOutgoing func(packet *SimPacket)
-	// Every message received by this SimConnector gets this function applied to it before entering the local message handler logic
-	ModifyIncoming func(packet *SimPacket)
-	// This function provides the baseline latency to a created SimConnection
-	DefineLatency func(laddr *net.UDPAddr) time.Duration
+	LocalAddress       *snet.UDPAddr                          // The local address of the instance this SimConnector is assigned to
+	requestDeadline    chan DeadlineRequest                   // This Channel gets passed to created SimConnection to enable their deadline functionality via the local clock
+	globalMessageBus   chan SimPacket                         // This channel is where all spawned SimConnection write to
+	Input              chan SimPacket                         // This channel is where all messages to this SimConnector's corresponding IP address are sent
+	totalWaiters       *atomic.Int32                          // TODO remove from handin version
+	waitingConnections *atomic.Int32                          // TODO remove from handin version
+	ModifyOutgoing     func(packet *SimPacket)                // Every SimConnection created by this SimConnector will apply this function to messages before passing it to the handler
+	ModifyIncoming     func(packet *SimPacket)                // Every message received by this SimConnector gets this function applied to it before entering the local message handler logic
+	DefineLatency      func(laddr *net.UDPAddr) time.Duration // This function provides the baseline latency to a created SimConnection
 
-	log *zap.Logger
-	// This channel is where all spawned SimConnection write to
-	globalMessageBus chan SimPacket
-	// Current port number to be assigned to the next SimConnection
-	port int
-	// Mapping from ports to the corresponding SimConnection;s input channel
-	connections map[int]chan SimPacket
-	// Channel to request deletion or insertion in connections map using RequestFromMapHandler structs
-	connectionsHandler chan RequestFromMapHandler
-	// This Channel gets passed to created SimConnection to enable their deadline functionality via the local clock
-	requestDeadline chan DeadlineRequest
-
-	// Counter for how many times the port has reached 60k and restarted at 10k (probably not useful)
-	portCycles int
+	port               int                        // Current port number to be assigned to the next SimConnection
+	connections        map[int]chan SimPacket     // Mapping from ports to the corresponding SimConnection;s input channel
+	connectionsHandler chan RequestFromMapHandler // Channel to request deletion or insertion in connections map using RequestFromMapHandler structs
+	portCycles         int                        // Counter for how many times the port has reached 60k and restarted at 10k
 }
 
 func (s *SimConnector) NewDaemonConnector(ctx context.Context, daemonAddr string) daemon.Connector {
@@ -202,6 +192,9 @@ func (s *SimConnector) ListenUDP(network string, laddr_orig *net.UDPAddr) (netba
 			s.port = 10000
 			s.portCycles += 1
 		}
+		if s.port == scion.EndhostPort { // Skip the endhost port the servers are listening on
+			s.port += 1
+		}
 		s.log.Debug("Incoming port is 0, assigned one by SimConnector",
 			zap.Int("new port", laddr.Port))
 	}
@@ -218,7 +211,7 @@ func (s *SimConnector) ListenUDP(network string, laddr_orig *net.UDPAddr) (netba
 		ConnectionsHandler: s.connectionsHandler,
 		RequestDeadline:    s.requestDeadline,
 		WaitCounter:        s.waitingConnections,
-		StopListening:      make(chan struct{}),
+		StopListening:      make(chan struct{}, 1),
 	}
 	tmp := make(chan interface{})
 	s.connectionsHandler <- RequestFromMapHandler{

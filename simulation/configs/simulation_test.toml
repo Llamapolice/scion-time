@@ -1,11 +1,11 @@
 time_handler_wait_duration = "5ms"
-time_handler_spin_amount = 5
+time_handler_spin_threshold = 5
 
 [[servers]]
 local_address = "1-ff00:0:111,10.1.1.11"
 daemon_address =  "simDaemon11"
 
-mbg_reference_clocks = ["simRefClk11"]
+mbg_reference_clocks = ["RefClk11"]
 ntp_reference_clocks = []
 scion_peers = ["1-ff00:0:111,10.1.1.12:10123"]
 auth_modes = ["spao"]
@@ -23,7 +23,7 @@ delay_after_start = "11s"
 local_address = "1-ff00:0:111,10.1.1.12"
 daemon_address = "simDaemon12"
 
-mbg_reference_clocks = ["simRefClk12"]
+mbg_reference_clocks = ["RefClk12"]
 ntp_reference_clocks = []
 scion_peers = ["1-ff00:0:111,10.1.1.11:10123"]
 auth_modes = ["spao"]
@@ -53,4 +53,4 @@ local_address = "1-ff00:0:111,10.1.1.20"
 remote_address = "1-ff00:0:111,10.1.1.11:10123"
 
 random_seed = 20
-delay_after_start = "20s"
+delay_after_start = "1s"
