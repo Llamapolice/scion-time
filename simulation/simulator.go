@@ -31,6 +31,7 @@ var NOPModifyMsgCopy = func(packet simutils.SimPacket) simutils.SimPacket {
 }
 var DefineDefaultLatency = func(_ *net.UDPAddr) time.Duration { return 2 * time.Millisecond }
 var NOPModifyTime = func(t time.Time) time.Time { return t }
+var AddOneSecond = func(t time.Time) time.Time { return t.Add(time.Second) }
 var NOPAdjustFunc = func(_ *simutils.SimClock, _, _ time.Duration, _ float64) {}
 
 type SimConfigFile struct {
@@ -408,7 +409,7 @@ func runTool(i int, tool SimSvcConfig) {
 
 	ensureConfigCompatibility(&tool)
 
-	lclk := simutils.NewSimulationClock(log, id, NOPModifyTime, NOPAdjustFunc, timeRequests, waitRequests, ExpectedWaitQueueSize)
+	lclk := simutils.NewSimulationClock(log, id, AddOneSecond, NOPAdjustFunc, timeRequests, waitRequests, ExpectedWaitQueueSize)
 
 	var laddr udp.UDPAddr
 	var raddr udp.UDPAddr
@@ -431,7 +432,7 @@ func runTool(i int, tool SimSvcConfig) {
 	simCrypt := simutils.NewSimCrypto(tool.Seed, log)
 
 	ntpcs := []*client.SCIONClient{
-		{Lclk: lclk, ConnectionProvider: simConnector, DSCP: 1, InterleavedMode: false},
+		{Lclk: lclk, ConnectionProvider: simConnector, DSCP: 0, InterleavedMode: false},
 	}
 	ps := []snet.Path{
 		path.Path{Src: laddrSNET.IA, Dst: raddrSNET.IA, DataplanePath: path.Empty{}},
@@ -442,7 +443,7 @@ func runTool(i int, tool SimSvcConfig) {
 	if err != nil {
 		log.Fatal("Tool had an error", zap.Error(err))
 	}
-	log.Debug("\u001B[31mMedian Duration measured by tool\u001B[0m",
+	log.Info("\u001B[31mMedian Duration measured by tool\u001B[0m",
 		zap.Duration("duration", medianDuration))
 }
 

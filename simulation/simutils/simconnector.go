@@ -136,8 +136,8 @@ func NewSimConnector(
 		for request := range connectionsHandlerInput {
 			port := request.Todo()
 			if port >= 0 {
-				log.Debug("removing waiter")
-				totalWaiters.Add(-1)
+				//log.Debug("removing waiter") // TODO remove
+				//totalWaiters.Add(-1)
 				delete(connections, port)
 			}
 			request.ReturnBack <- port
