@@ -23,7 +23,6 @@ type PathInterfaceArrayMarshaler struct {
 func (m PathInterfaceArrayMarshaler) MarshalLogArray(enc zapcore.ArrayEncoder) error {
 	var err error
 	for _, i := range m.PathInterfaces {
-		i := i
 		err = enc.AppendObject(PathInterfaceMarshaler{PathInterface: i})
 		if err != nil {
 			return err
@@ -63,7 +62,6 @@ type PathArrayMarshaler struct {
 func (m PathArrayMarshaler) MarshalLogArray(enc zapcore.ArrayEncoder) error {
 	var err error
 	for _, p := range m.Paths {
-		p := p
 		err = enc.AppendObject(PathMarshaler{Path: p})
 		if err != nil {
 			return err

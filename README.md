@@ -73,10 +73,10 @@ On x86-64:
 
 ```bash
 sudo rm -rf /usr/local/go
-curl -LO https://golang.org/dl/go1.21.6.linux-amd64.tar.gz
-echo "3f934f40ac360b9c01f616a9aa1796d227d8b0328bf64cb045c7b8c4ee9caea4 go1.21.6.linux-amd64.tar.gz" | sha256sum -c
-sudo tar -C /usr/local -xzf go1.21.6.linux-amd64.tar.gz
-rm go1.21.6.linux-amd64.tar.gz
+curl -LO https://golang.org/dl/go1.22.0.linux-amd64.tar.gz
+echo "f6c8a87aa03b92c4b0bf3d558e28ea03006eb29db78917daec5cfb6ec1046265 go1.22.0.linux-amd64.tar.gz" | sha256sum -c
+sudo tar -C /usr/local -xzf go1.22.0.linux-amd64.tar.gz
+rm go1.22.0.linux-amd64.tar.gz
 echo >> .bash_profile
 echo 'export PATH=$PATH:/usr/local/go/bin' >> .bash_profile
 source ~/.bash_profile
@@ -87,10 +87,10 @@ On ARM64:
 
 ```bash
 sudo rm -rf /usr/local/go
-curl -LO https://golang.org/dl/go1.21.6.linux-arm64.tar.gz
-echo "e2e8aa88e1b5170a0d495d7d9c766af2b2b6c6925a8f8956d834ad6b4cacbd9a go1.21.6.linux-arm64.tar.gz" | sha256sum -c
-sudo tar -C /usr/local -xzf go1.21.6.linux-arm64.tar.gz
-rm go1.21.6.linux-arm64.tar.gz
+curl -LO https://golang.org/dl/go1.22.0.linux-arm64.tar.gz
+echo "6a63fef0e050146f275bf02a0896badfe77c11b6f05499bb647e7bd613a45a10 go1.22.0.linux-arm64.tar.gz" | sha256sum -c
+sudo tar -C /usr/local -xzf go1.22.0.linux-arm64.tar.gz
+rm go1.22.0.linux-arm64.tar.gz
 echo >> .bash_profile
 echo 'export PATH=$PATH:/usr/local/go/bin' >> .bash_profile
 source ~/.bash_profile
