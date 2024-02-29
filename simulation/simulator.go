@@ -376,11 +376,24 @@ func RunSimulation(configFile string, logger *zap.Logger) {
 
 }
 
+func convertMBGClocks(refClocks []client.ReferenceClock) {
+	for i := range refClocks {
+		if c, ok := refClocks[i].(*core.MbgReferenceClock); ok {
+			refClocks[i] = &simutils.SimReferenceClock{Id: c.Dev}
+		}
+	}
+	// TODO also convert NTPReferenceClocks
+}
+
 func ensureConfigCompatibility(cfg *SimSvcConfig) {
 	if len(cfg.AuthModes) > 0 {
 		log.Warn("Auth modes are currently not supported by the simulation, will be ignored")
 	}
 	cfg.AuthModes = cfg.AuthModes[:0]
+	if len(cfg.NTPReferenceClocks) > 0 {
+		log.Warn("NTP clocks are currently not supported by the simulation, will be ignored")
+	}
+	cfg.NTPReferenceClocks = cfg.NTPReferenceClocks[:0]
 	for i := range cfg.MBGReferenceClocks {
 		cfg.MBGReferenceClocks[i] = "sim" + cfg.MBGReferenceClocks[i]
 	}
@@ -465,6 +478,7 @@ func clientSetUp(i int, clnt SimSvcConfig) Client {
 
 	laddr.Host.Port = 0
 	refClocks, netClocks := core.CreateClocks(clnt.SvcConfig, laddr, simClk, simNet, simCrypt, log)
+	convertMBGClocks(refClocks)
 	syncClks := sync.RegisterClocks(refClocks, netClocks)
 	syncClks.Id = tmp.Id
 	tmp.SyncClks = syncClks
@@ -512,6 +526,7 @@ func relaySetUp(i int, relay SimSvcConfig) Relay {
 	log.Debug("Starting clock sync")
 	localAddr.Host.Port = 0
 	refClocks, netClocks := core.CreateClocks(relay.SvcConfig, localAddr, simClk, simNet, simCrypt, log)
+	convertMBGClocks(refClocks)
 	syncClks := sync.RegisterClocks(refClocks, netClocks)
 	syncClks.Id = tmp.Id
 	tmp.SyncClks = syncClks
@@ -557,6 +572,7 @@ func serverSetUp(i int, simServer SimSvcConfig) Server {
 	log.Debug("Starting clock sync")
 	localAddr.Host.Port = 0
 	refClocks, netClocks := core.CreateClocks(simServer.SvcConfig, localAddr, simClk, simNet, simCrypt, log)
+	convertMBGClocks(refClocks)
 	syncClks := sync.RegisterClocks(refClocks, netClocks)
 	syncClks.Id = tmp.Id
 	tmp.SyncClks = syncClks

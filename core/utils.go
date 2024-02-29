@@ -11,7 +11,6 @@ import (
 	"example.com/scion-time/driver/mbg"
 	"example.com/scion-time/net/scion"
 	"example.com/scion-time/net/udp"
-	"example.com/scion-time/simulation/simutils"
 	"fmt"
 	"github.com/pelletier/go-toml/v2"
 	"github.com/scionproto/scion/pkg/addr"
@@ -77,14 +76,14 @@ func (c *NtpReferenceClockIP) MeasureClockOffset(ctx context.Context, log *zap.L
 }
 
 // Originally in timeservice.go
-type mbgReferenceClock struct {
-	dev string
+type MbgReferenceClock struct {
+	Dev string
 }
 
 // Originally in timeservice.go
-func (c *mbgReferenceClock) MeasureClockOffset(ctx context.Context, log *zap.Logger) (
+func (c *MbgReferenceClock) MeasureClockOffset(ctx context.Context, log *zap.Logger) (
 	time.Duration, error) {
-	return mbg.MeasureClockOffset(ctx, log, c.dev)
+	return mbg.MeasureClockOffset(ctx, log, c.Dev)
 }
 
 // LoadConfig loads configuration from a file and decodes it into a struct.
@@ -118,14 +117,13 @@ func CreateClocks(
 
 	// this for example could be a simulated gps clock
 	// maybe implement this using something like SimReferenceClocks (also then in config)
-	// TODO is there a better way than this string comparison
 	for _, s := range cfg.MBGReferenceClocks {
-		if s[:3] == "sim" {
-			refClocks = append(refClocks, &simutils.SimReferenceClock{Id: s})
-			continue
-		}
-		refClocks = append(refClocks, &mbgReferenceClock{
-			dev: s,
+		//if s[:3] == "sim" { // TODO remove
+		//	refClocks = append(refClocks, &simutils.SimReferenceClock{Id: s})
+		//	continue
+		//}
+		refClocks = append(refClocks, &MbgReferenceClock{
+			Dev: s,
 		})
 	}
 
