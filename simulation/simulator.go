@@ -432,7 +432,7 @@ func runTool(i int, tool SimSvcConfig) {
 	simCrypt := simutils.NewSimCrypto(tool.Seed, log)
 
 	ntpcs := []*client.SCIONClient{
-		{Lclk: lclk, ConnectionProvider: simConnector, DSCP: 0, InterleavedMode: false},
+		{Lclk: lclk, ConnectionProvider: simConnector, DSCP: 63, InterleavedMode: false},
 	}
 	ps := []snet.Path{
 		path.Path{Src: laddrSNET.IA, Dst: raddrSNET.IA, DataplanePath: path.Empty{}},
@@ -443,8 +443,8 @@ func runTool(i int, tool SimSvcConfig) {
 	if err != nil {
 		log.Fatal("Tool had an error", zap.Error(err))
 	}
-	log.Info("\u001B[31mMedian Duration measured by tool\u001B[0m",
-		zap.Duration("duration", medianDuration))
+	log.Info("\u001B[31mMedian Offset measured by tool\u001B[0m",
+		zap.Duration("offset", medianDuration))
 }
 
 func clientSetUp(i int, clnt SimSvcConfig) Client {
