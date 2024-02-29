@@ -28,7 +28,7 @@ func WithTimeout(simClock *SimClock, timeout time.Duration) (context.Context, fu
 		WaitDuration: timeout,
 		Action: func() {
 			c.cancel()
-			c.waitQueue.Add(-1)
+			c.waitQueue.Add(-1) // TODO remove
 		},
 	}
 	return c, func() {
@@ -36,6 +36,8 @@ func WithTimeout(simClock *SimClock, timeout time.Duration) (context.Context, fu
 	}
 }
 
+// CustomContext is a stripped down version of cancelCtx from Go's context package.
+// It enables setting a timeout based on a SimClock instead of time.Now() as Go's context does.
 type CustomContext struct {
 	log       *zap.Logger
 	deadline  time.Time
@@ -66,6 +68,7 @@ func (c *CustomContext) Done() <-chan struct{} {
 func (c *CustomContext) cancel() {
 	// inspired by context.go
 	if c.canceled.Load() {
+		// TODO remove
 		c.waitQueue.Add(1) // needed because this will be called by the deferred cancel() meaning something else will continue running after this
 		c.log.Debug("context double canceled, incrementing queue size again")
 		return
