@@ -257,7 +257,7 @@ func RunSimulation(configFile string, logger *zap.Logger) {
 				currentlyWaiting = append(currentlyWaiting, waitForDeadline)
 			default:
 				time.Sleep(loopWaitDuration) // TODO just for development
-				if len(currentlyWaiting) >= 0 {
+				if len(currentlyWaiting) > 0 {
 					loopsWaiting += 1
 					//log.Info(
 					//	"\u001B[41m======== TIME HANDLER ========\u001B[0m",
