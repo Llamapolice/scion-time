@@ -12,3 +12,5 @@ testnet/logs
 testnet/gen-cache
 #IDE project settings
 .idea
+/simulation/graphics.drawio
+/simulation/.$graphics.drawio.bkp
