@@ -34,6 +34,7 @@ var DefineDefaultLatency = func(_ *net.UDPAddr) time.Duration { return 2 * time.
 var AddOneSecond = func(t time.Time) time.Time { return t.Add(time.Second) }
 
 type SimConfigFile struct {
+	ManualTimeHandlerStep    bool           `toml:"manual_time_handler_step"`
 	TimeHandlerWaitDuration  string         `toml:"time_handler_wait_duration"`
 	TimeHandlerSpinThreshold int            `toml:"time_handler_spin_threshold"`
 	Servers                  []SimSvcConfig `toml:"servers"`
@@ -255,18 +256,23 @@ func RunSimulation(configFile string, logger *zap.Logger) {
 				}
 				currentlyWaiting = append(currentlyWaiting, waitForDeadline)
 			default:
-				time.Sleep(loopWaitDuration) // TODO just for development
-				if len(currentlyWaiting) > 0 {
-					loopsWaiting += 1
-					//log.Info(
-					//	"\u001B[41m======== TIME HANDLER ========\u001B[0m",
-					//	zap.Int("waited for", loopsWaiting),
-					//	zap.Int("waiting sleepers", len(currentlyWaiting)),
-					//	zap.Int32("waiting connections", waitingConnections.Load()),
-					//	zap.Int32("expected to wait", ExpectedWaitQueueSize.Load()),
-					//)
-					//if len(currentlyWaiting)+int(waitingConnections.Load()) < int(ExpectedWaitQueueSize.Load()) { // TODO how to adjust this number dynamically?
-					if loopsWaiting <= loopSpinThreshold {
+				time.Sleep(loopWaitDuration)
+				if len(currentlyWaiting) <= 0 {
+					continue // No need to consider stepping ahead if nothing is waiting yet
+				}
+				loopsWaiting += 1
+				if loopsWaiting <= loopSpinThreshold {
+					continue // Haven't waited long enough, don't step yet
+				}
+				loopsWaiting = 0
+				if cfg.ManualTimeHandlerStep { // If the manual flag is set in the config, wait for input before stepping
+					log.Info("Enter 'w' to wait one loop for other goroutines or enter 'p' to process the next request in the queue (q for os.Exit(0))")
+					log.Info("If other log messages appear when entering 'w', the time_handler_wait_duration and _spin_amount values are too small")
+					scanner.Scan()
+					if scanner.Text() == "q" {
+						os.Exit(0)
+					}
+					if scanner.Text() != "p" {
 						continue
 					}
 					loopsWaiting = 0
