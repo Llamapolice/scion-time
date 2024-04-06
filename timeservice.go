@@ -7,7 +7,6 @@ import (
 	"crypto/tls"
 	"encoding/hex"
 	"example.com/scion-time/core"
-	"example.com/scion-time/core/netcore"
 	"example.com/scion-time/driver/networking"
 	"flag"
 	"fmt"
@@ -35,7 +34,6 @@ import (
 	"example.com/scion-time/benchmark"
 
 	"example.com/scion-time/core/client"
-	"example.com/scion-time/core/cryptocore"
 	"example.com/scion-time/core/server"
 	"example.com/scion-time/core/sync"
 	"example.com/scion-time/core/timecore"
@@ -147,10 +145,8 @@ func runServer(configFile string) {
 	timecore.RegisterClock(lclk)
 
 	lcrypt := &crypto.SafeCrypto{Log: log}
-	cryptocore.RegisterCrypto(lcrypt)
 
 	lnet := &networking.UDPConnector{Log: log}
-	netcore.RegisterConnProvider(lnet)
 
 	localAddr.Host.Port = 0
 	refClocks, netClocks := core.CreateClocks(cfg, localAddr, lclk, lnet, lcrypt, log)
@@ -192,10 +188,8 @@ func runRelay(configFile string) {
 	timecore.RegisterClock(lclk)
 
 	lcrypt := &crypto.SafeCrypto{Log: log}
-	cryptocore.RegisterCrypto(lcrypt)
 
 	lnet := &networking.UDPConnector{Log: log}
-	netcore.RegisterConnProvider(lnet)
 
 	localAddr.Host.Port = 0
 	refClocks, netClocks := core.CreateClocks(cfg, localAddr, lclk, lnet, lcrypt, log)
@@ -236,10 +230,8 @@ func runClient(configFile string) {
 	timecore.RegisterClock(lclk)
 
 	lcrypt := &crypto.SafeCrypto{Log: log}
-	cryptocore.RegisterCrypto(lcrypt)
 
 	lnet := &networking.UDPConnector{Log: log}
-	netcore.RegisterConnProvider(lnet)
 
 	localAddr.Host.Port = 0
 	refClocks, netClocks := core.CreateClocks(cfg, localAddr, lclk, lnet, lcrypt, log)
@@ -276,11 +268,7 @@ func runIPTool(localAddr, remoteAddr *snet.UDPAddr, dscp uint8,
 	lclk := &clock.SystemClock{Log: log}
 	timecore.RegisterClock(lclk)
 
-	lcrypt := &crypto.SafeCrypto{Log: log}
-	cryptocore.RegisterCrypto(lcrypt)
-
 	lnet := &networking.UDPConnector{Log: log}
-	netcore.RegisterConnProvider(lnet)
 
 	laddr := localAddr.Host
 	raddr := remoteAddr.Host
@@ -316,10 +304,8 @@ func runSCIONTool(daemonAddr, dispatcherMode string, localAddr, remoteAddr *snet
 	timecore.RegisterClock(lclk)
 
 	lcrypt := &crypto.SafeCrypto{Log: log}
-	cryptocore.RegisterCrypto(lcrypt)
 
 	lnet := &networking.UDPConnector{Log: log}
-	netcore.RegisterConnProvider(lnet)
 
 	if dispatcherMode == dispatcherModeInternal {
 		server.StartSCIONDispatcher(ctx, log, lclk, lnet, snet.CopyUDPAddr(localAddr.Host))
@@ -395,11 +381,7 @@ func runIPBenchmark(localAddr, remoteAddr *snet.UDPAddr, authModes []string, nts
 	lclk := &clock.SystemClock{Log: zap.NewNop()}
 	timecore.RegisterClock(lclk)
 
-	lcrypt := &crypto.SafeCrypto{Log: zap.NewNop()}
-	cryptocore.RegisterCrypto(lcrypt)
-
 	lnet := &networking.UDPConnector{Log: zap.NewNop()}
-	netcore.RegisterConnProvider(lnet)
 
 	benchmark.RunIPBenchmark(localAddr.Host, remoteAddr.Host, lclk, lnet, authModes, ntskeServer, log)
 }
@@ -409,10 +391,8 @@ func runSCIONBenchmark(daemonAddr string, localAddr, remoteAddr *snet.UDPAddr, a
 	timecore.RegisterClock(lclk)
 
 	lcrypt := &crypto.SafeCrypto{Log: zap.NewNop()}
-	cryptocore.RegisterCrypto(lcrypt)
 
 	lnet := &networking.UDPConnector{Log: zap.NewNop()}
-	netcore.RegisterConnProvider(lnet)
 
 	benchmark.RunSCIONBenchmark(daemonAddr, localAddr, remoteAddr, lclk, lnet, lcrypt, authModes, ntskeServer, log)
 }
