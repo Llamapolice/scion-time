@@ -10,25 +10,22 @@ import (
 )
 
 func WithTimeout(simClock *SimClock, timeout time.Duration) (context.Context, func()) {
-	simClock.ExpectedWaitQueueSize.Add(1)
 	simClock.Log.Debug("context created")
 	atomicFalse := atomic.Bool{}
 	atomicFalse.Store(false)
 	c := &CustomContext{
-		log:       simClock.Log,
-		deadline:  simClock.Now().Add(timeout),
-		lclk:      simClock,
-		canceled:  &atomicFalse,
-		waitQueue: simClock.ExpectedWaitQueueSize,
-		mu:        sync.Mutex{},
-		done:      atomic.Value{},
+		log:      simClock.Log,
+		deadline: simClock.Now().Add(timeout),
+		lclk:     simClock,
+		canceled: &atomicFalse,
+		mu:       sync.Mutex{},
+		done:     atomic.Value{},
 	}
 	simClock.WaitRequest <- WaitRequest{
 		Id:           "context deadline",
 		WaitDuration: timeout,
-		Action: func() {
+		Action: func(_, _ time.Time) {
 			c.cancel()
-			c.waitQueue.Add(-1) // TODO remove
 		},
 	}
 	return c, func() {
@@ -68,9 +65,6 @@ func (c *CustomContext) Done() <-chan struct{} {
 func (c *CustomContext) cancel() {
 	// inspired by context.go
 	if c.canceled.Load() {
-		// TODO remove
-		c.waitQueue.Add(1) // needed because this will be called by the deferred cancel() meaning something else will continue running after this
-		c.log.Debug("context double canceled, incrementing queue size again")
 		return
 	}
 	c.log.Debug("context got canceled")

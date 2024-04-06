@@ -164,7 +164,7 @@ func RunSimulation(configFile string, logger *zap.Logger) {
 					// necessary, otherwise the function will use the current simConn and msg during its execution instead of creation (what we want)
 					tmp := *simConn
 					tmpMsg := globalModifyMsg(msg)
-					passOn := func() { // Create a function that will pass the message into the simConn's input channel
+					passOn := func(r, n time.Time) { // Create a function that will pass the message into the simConn's input channel
 						tmp.Input <- tmpMsg
 						log.Debug(
 							"Passed message on to instance",
@@ -206,26 +206,13 @@ func RunSimulation(configFile string, logger *zap.Logger) {
 				loopsWaiting = 0
 				req.ReturnChan <- now
 			case req := <-waitRequests:
+				if !req.WaitDeadline.IsZero() {
+					req.WaitDuration = req.WaitDeadline.Sub(now)
+				}
 				log.Debug("Wait has been requested", zap.String("by", req.Id), zap.Time("at", now), zap.Duration("duration", req.WaitDuration))
 				loopsWaiting = 0
+				req.ReceivedAt = now
 				currentlyWaiting = append(currentlyWaiting, req)
-			case req := <-deadlineRequests:
-				ExpectedWaitQueueSize.Add(1)
-				log.Debug("Deadline has been requested", zap.String("by", req.Id))
-				log.Debug("adding waiter deadline request")
-				loopsWaiting = 0
-				req.RequestTime = now
-				duration := req.Deadline.Sub(req.RequestTime)
-				waitForDeadline := simutils.WaitRequest{
-					Id:           req.Id,
-					WaitDuration: duration,
-					Action: func() {
-						log.Debug("removing waiter deadline request")
-						req.Unblock <- duration
-						ExpectedWaitQueueSize.Add(-1)
-					},
-				}
-				currentlyWaiting = append(currentlyWaiting, waitForDeadline)
 			default:
 				time.Sleep(loopWaitDuration)
 				if len(currentlyWaiting) <= 0 {
@@ -374,7 +361,7 @@ func pauseSetUp(instance SimSvcConfig, instanceType string, i int) {
 	waitRequests <- simutils.WaitRequest{
 		Id:           "afterStartDelay_" + instanceType + strconv.Itoa(i),
 		WaitDuration: waitDuration,
-		Action:       func() { unblockChan <- struct{}{} },
+		Action:       func(_, _ time.Time) { unblockChan <- struct{}{} },
 	}
 	<-unblockChan
 	close(unblockChan)
@@ -404,7 +391,7 @@ func runTool(i int, tool SimSvcConfig) {
 	}
 	raddr = udp.UDPAddrFromSnet(&raddrSNET)
 
-	simConnector := simutils.NewSimConnector(log, id, &laddrSNET, receiver, deadlineRequests, NOPModifyMsg, NOPModifyMsg, DefineDefaultLatency, ExpectedWaitQueueSize, waitingConnections)
+	simConnector := simutils.NewSimConnector(log, id, &laddrSNET, receiver, waitRequests, NOPModifyMsg, NOPModifyMsg, DefineDefaultLatency)
 	simConnectors = append(simConnectors, simConnector)
 
 	simCrypt := simutils.NewSimCrypto(tool.Seed, log)
@@ -436,7 +423,7 @@ func clientSetUp(i int, clnt SimSvcConfig) Client {
 	tmp.LocalClk = simClk
 
 	laddr := core.LocalAddress(clnt.SvcConfig)
-	simNet := simutils.NewSimConnector(log, tmp.Id, laddr, receiver, deadlineRequests, NOPModifyMsg, NOPModifyMsg, DefineDefaultLatency, ExpectedWaitQueueSize, waitingConnections)
+	simNet := simutils.NewSimConnector(log, tmp.Id, laddr, receiver, waitRequests, NOPModifyMsg, NOPModifyMsg, DefineDefaultLatency)
 	simConnectors = append(simConnectors, simNet)
 
 	simCrypt := simutils.NewSimCrypto(clnt.Seed, log)
@@ -482,7 +469,7 @@ func relaySetUp(i int, relay SimSvcConfig) Relay {
 	tmp.LocalClk = simClk
 
 	localAddr := core.LocalAddress(relay.SvcConfig)
-	simNet := simutils.NewSimConnector(log, tmp.Id, localAddr, receiver, deadlineRequests, NOPModifyMsg, NOPModifyMsg, DefineDefaultLatency, ExpectedWaitQueueSize, waitingConnections)
+	simNet := simutils.NewSimConnector(log, tmp.Id, localAddr, receiver, waitRequests, NOPModifyMsg, NOPModifyMsg, DefineDefaultLatency)
 	simConnectors = append(simConnectors, simNet)
 
 	simCrypt := simutils.NewSimCrypto(relay.Seed, log)
@@ -525,7 +512,7 @@ func serverSetUp(i int, simServer SimSvcConfig) Server {
 	tmp.LocalClk = simClk
 
 	localAddr := core.LocalAddress(simServer.SvcConfig)
-	simNet := simutils.NewSimConnector(log, tmp.Id, localAddr, receiver, deadlineRequests, NOPModifyMsg, NOPModifyMsg, DefineDefaultLatency, ExpectedWaitQueueSize, waitingConnections)
+	simNet := simutils.NewSimConnector(log, tmp.Id, localAddr, receiver, waitRequests, NOPModifyMsg, NOPModifyMsg, DefineDefaultLatency)
 	simConnectors = append(simConnectors, simNet)
 
 	simCrypt := simutils.NewSimCrypto(simServer.Seed, log)

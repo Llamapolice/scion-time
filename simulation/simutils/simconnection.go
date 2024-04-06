@@ -5,7 +5,6 @@ import (
 	"go.uber.org/zap"
 	"net"
 	"net/netip"
-	"sync/atomic"
 	"time"
 )
 
@@ -28,22 +27,15 @@ type SimConnection struct {
 	Network            string                     // Will always be "udp"
 	LAddr              *net.UDPAddr               // The address including port this connection is listening on
 	ConnectionsHandler chan RequestFromMapHandler // Channel to notify the SimConnector when closing
-	RequestDeadline    chan DeadlineRequest       // Channel to request a deadline from the time handler
+	RequestWait        chan WaitRequest           // Channel to request a wait from the time handler (used for deadlines)
 	expired            bool                       // Set to true if the connection has timed out
-	WaitCounter        *atomic.Int32              // TODO remove
 }
 
 func (S *SimConnection) Close() error {
 	if S.Closed {
-		if S.expired {
-			S.WaitCounter.Add(1) // TODO remove
-		}
 		S.Log.Error("Trying to close already closed connection",
 			zap.String("conn id", S.Id), zap.String("conn laddr", S.LAddr.String()))
 		return nil
-	}
-	if S.expired {
-		S.WaitCounter.Add(-1) // TODO remove
 	}
 	S.Closed = true
 	//S.expired = false
@@ -65,10 +57,6 @@ func (S *SimConnection) Close() error {
 	return nil
 }
 
-//func (S *SimConnection) Write(b []byte) (n int, err error) { // TODO remove
-//	panic("Write: implement me")
-//}
-
 func (S *SimConnection) ReadMsgUDPAddrPort(buf []byte, oob []byte) (
 	n int,
 	oobn int,
@@ -78,18 +66,15 @@ func (S *SimConnection) ReadMsgUDPAddrPort(buf []byte, oob []byte) (
 ) {
 	S.Log.Debug("Connection was asked to ReadMsgUDPAddrPort, waiting for something to come in on the channel",
 		zap.String("Server ID", S.Id))
-	S.WaitCounter.Add(1)
 	var msg SimPacket
 	select {
 	case msg = <-S.ReadFrom:
 		S.Log.Debug("Received message", zap.String("connection id", S.Id), zap.Stringer("from", msg.SourceAddr))
 	case <-S.StopListening:
-		S.WaitCounter.Add(-1)
 		S.Log.Debug("Connection was closed, stopping the listener", zap.String("id", S.Id))
 		S.StopListening <- struct{}{}
 		return 0, 0, 0, netip.AddrPort{}, SimConnectionError{"connection timed out"}
 	}
-	S.WaitCounter.Add(-1)
 	data := msg.B
 	if len(data) > cap(buf) {
 		S.Log.Error("Buffer passed to ReadMsgUDPAddrPort is too small",
@@ -126,29 +111,38 @@ func (S *SimConnection) SetDeadline(t time.Time) error {
 	S.Log.Debug("Connection getting a deadline",
 		zap.String("conn id", S.Id), zap.Time("deadline", t))
 	S.Deadline = t
-	go func() {
-		unblock := make(chan time.Duration)
-		S.RequestDeadline <- DeadlineRequest{Id: S.Id, Deadline: t, Unblock: unblock}
-		sleepDuration := <-unblock
-		if S.Closed {
-			S.Log.Debug("Already closed connection timed out",
-				zap.String("conn id", S.Id))
-			return
-		}
-		S.Log.Debug("Connection timed out",
-			zap.String("conn id", S.Id), zap.Duration("after", sleepDuration))
-		S.expired = true
-		err := S.Close()
-		if err != nil {
-			S.Log.Error("Deadline sleeping did not work",
-				zap.String("connection id", S.Id), zap.Error(err))
-		}
-	}()
+	go S.waitForDeadline()
 	return nil
 }
 
 func (S *SimConnection) LocalAddr() net.Addr {
 	return S.LAddr
+}
+
+func (S *SimConnection) waitForDeadline() {
+	unblock := make(chan time.Time)
+	S.RequestWait <- WaitRequest{
+		Id:           S.Id,
+		WaitDeadline: S.Deadline,
+		Action: func(receivedAt, now time.Time) {
+			unblock <- receivedAt
+		},
+	}
+	requestTime := <-unblock
+	sleepDuration := S.Deadline.Sub(requestTime)
+	if S.Closed {
+		S.Log.Debug("Already closed connection timed out",
+			zap.String("conn id", S.Id))
+		return
+	}
+	S.Log.Debug("Connection timed out",
+		zap.String("conn id", S.Id), zap.Duration("after", sleepDuration))
+	S.expired = true
+	err := S.Close()
+	if err != nil {
+		S.Log.Error("Deadline sleeping did not work",
+			zap.String("connection id", S.Id), zap.Error(err))
+	}
 }
 
 var _ netbase.Connection = (*SimConnection)(nil)

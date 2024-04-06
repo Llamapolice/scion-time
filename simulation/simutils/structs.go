@@ -40,9 +40,11 @@ type TimeRequest struct {
 
 type WaitRequest struct {
 	Id           string
+	WaitDeadline time.Time // If this is set (i.e. WaitDeadline.IsZero() == false), WaitDuration is ignored
 	WaitDuration time.Duration
-	Action       func()
-	//Unblock       chan interface{}
+	Action       func(receivedAt, now time.Time)
+
+	ReceivedAt time.Time // Populated by the TimeHandler upon receiving the request
 }
 
 type DeadlineRequest struct {
