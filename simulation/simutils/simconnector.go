@@ -6,16 +6,11 @@ import (
 	"example.com/scion-time/net/scion"
 	"github.com/scionproto/scion/pkg/addr"
 	"github.com/scionproto/scion/pkg/daemon"
-	"github.com/scionproto/scion/pkg/drkey"
-	"github.com/scionproto/scion/pkg/private/common"
-	"github.com/scionproto/scion/pkg/private/ctrl/path_mgmt"
 	"github.com/scionproto/scion/pkg/snet"
-	"github.com/scionproto/scion/pkg/snet/path"
 	"go.uber.org/zap"
 	"net"
 	"strconv"
 	"strings"
-	"sync/atomic"
 	"time"
 )
 
@@ -23,15 +18,13 @@ type SimConnector struct {
 	Id  string      // Identifier string
 	log *zap.Logger // Logger
 
-	LocalAddress       *snet.UDPAddr                          // The local address of the instance this SimConnector is assigned to
-	requestDeadline    chan DeadlineRequest                   // This Channel gets passed to created SimConnection to enable their deadline functionality via the local clock
-	globalMessageBus   chan SimPacket                         // This channel is where all spawned SimConnection write to
-	Input              chan SimPacket                         // This channel is where all messages to this SimConnector's corresponding IP address are sent
-	totalWaiters       *atomic.Int32                          // TODO remove
-	waitingConnections *atomic.Int32                          // TODO remove
-	ModifyOutgoing     func(packet *SimPacket)                // Every SimConnection created by this SimConnector will apply this function to messages before passing it to the handler
-	ModifyIncoming     func(packet *SimPacket)                // Every message received by this SimConnector gets this function applied to it before entering the local message handler logic
-	DefineLatency      func(laddr *net.UDPAddr) time.Duration // This function provides the baseline latency to a created SimConnection
+	LocalAddress     *snet.UDPAddr                          // The local address of the instance this SimConnector is assigned to
+	requestWait      chan WaitRequest                       // This Channel gets passed to created SimConnection to enable their deadline functionality via the local clock
+	globalMessageBus chan SimPacket                         // This channel is where all spawned SimConnection write to
+	Input            chan SimPacket                         // This channel is where all messages to this SimConnector's corresponding IP address are sent
+	ModifyOutgoing   func(packet *SimPacket)                // Every SimConnection created by this SimConnector will apply this function to messages before passing it to the handler
+	ModifyIncoming   func(packet *SimPacket)                // Every message received by this SimConnector gets this function applied to it before entering the local message handler logic
+	DefineLatency    func(laddr *net.UDPAddr) time.Duration // This function provides the baseline latency to a created SimConnection
 
 	port               int                        // Current port number to be assigned to the next SimConnection
 	connections        map[int]chan SimPacket     // Mapping from ports to the corresponding SimConnection;s input channel
@@ -60,11 +53,9 @@ func NewSimConnector(
 	id string,
 	laddr *snet.UDPAddr,
 	globalMessageBus chan SimPacket,
-	requestDeadline chan DeadlineRequest,
+	requestWait chan WaitRequest,
 	ModifyIncomingMsg, ModifyOutgoingMsg func(packet *SimPacket),
 	DefineLatency func(laddr *net.UDPAddr) time.Duration,
-	totalWaiters *atomic.Int32,
-	waitingConnections *atomic.Int32,
 ) *SimConnector {
 	id = id + "_SimConnector"
 	log.Info("Creating a new sim connector", zap.String("id", id), zap.String("laddr", laddr.String()))
@@ -76,8 +67,6 @@ func NewSimConnector(
 		for request := range connectionsHandlerInput {
 			port := request.Todo()
 			if port >= 0 {
-				//log.Debug("removing waiter") // TODO remove
-				//totalWaiters.Add(-1)
 				delete(connections, port)
 			}
 			request.ReturnBack <- port
@@ -105,8 +94,6 @@ func NewSimConnector(
 		Id:                 id,
 		LocalAddress:       laddr,
 		Input:              input,
-		totalWaiters:       totalWaiters,
-		waitingConnections: waitingConnections,
 		ModifyIncoming:     ModifyIncomingMsg,
 		ModifyOutgoing:     ModifyOutgoingMsg,
 		DefineLatency:      DefineLatency,
@@ -115,14 +102,13 @@ func NewSimConnector(
 		port:               10000,
 		connections:        connections,
 		connectionsHandler: connectionsHandlerInput,
-		requestDeadline:    requestDeadline,
+		requestWait:        requestWait,
 		portCycles:         0,
 	}
 }
 
 func (s *SimConnector) ListenUDP(network string, laddr_orig *net.UDPAddr) (netbase.Connection, error) {
 	s.log.Info("Opening a sim connection", zap.Stringer("incoming laddr", laddr_orig))
-	s.totalWaiters.Add(1)
 	laddr := *laddr_orig
 	if laddr.Port == 0 {
 		laddr.Port = s.port
@@ -149,8 +135,7 @@ func (s *SimConnector) ListenUDP(network string, laddr_orig *net.UDPAddr) (netba
 		Network:            network,
 		LAddr:              &laddr,
 		ConnectionsHandler: s.connectionsHandler,
-		RequestDeadline:    s.requestDeadline,
-		WaitCounter:        s.waitingConnections,
+		RequestWait:        s.requestWait,
 		StopListening:      make(chan struct{}, 1),
 	}
 	tmp := make(chan interface{})
@@ -197,63 +182,3 @@ func (s *SimConnector) ListenPacket(network string, address string) (netbase.Con
 }
 
 var _ netbase.ConnProvider = (*SimConnector)(nil)
-
-type SimDaemonConnector struct {
-	Ctx        context.Context // TODO remove
-	DaemonAddr string
-	CallerIA   addr.IA
-}
-
-func (s SimDaemonConnector) LocalIA(ctx context.Context) (addr.IA, error) {
-	return s.CallerIA, nil
-}
-
-func (s SimDaemonConnector) Paths(ctx context.Context, dst, src addr.IA, f daemon.PathReqFlags) ([]snet.Path, error) {
-	//TODO does this need more?
-	paths := []snet.Path{
-		path.Path{Src: src, Dst: dst, DataplanePath: path.Empty{}},
-	}
-	return paths, nil
-}
-
-func (s SimDaemonConnector) ASInfo(ctx context.Context, ia addr.IA) (daemon.ASInfo, error) {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (s SimDaemonConnector) IFInfo(ctx context.Context, ifs []common.IFIDType) (map[common.IFIDType]*net.UDPAddr, error) {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (s SimDaemonConnector) SVCInfo(ctx context.Context, svcTypes []addr.SVC) (map[addr.SVC][]string, error) {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (s SimDaemonConnector) RevNotification(ctx context.Context, revInfo *path_mgmt.RevInfo) error {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (s SimDaemonConnector) DRKeyGetASHostKey(ctx context.Context, meta drkey.ASHostMeta) (drkey.ASHostKey, error) {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (s SimDaemonConnector) DRKeyGetHostASKey(ctx context.Context, meta drkey.HostASMeta) (drkey.HostASKey, error) {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (s SimDaemonConnector) DRKeyGetHostHostKey(ctx context.Context, meta drkey.HostHostMeta) (drkey.HostHostKey, error) {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (s SimDaemonConnector) Close() error {
-	//TODO implement me
-	panic("implement me")
-}
-
-var _ daemon.Connector = (*SimDaemonConnector)(nil)
