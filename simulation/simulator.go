@@ -17,7 +17,6 @@ import (
 	"net"
 	"os"
 	"strconv"
-	"sync/atomic"
 	"time"
 )
 
@@ -72,29 +71,6 @@ type Relay struct {
 	Server
 }
 
-type instance struct {
-	// TODO remove
-	instanceType        int8
-	malicious           int8
-	failureChance       float64
-	meanFailureDuration time.Duration
-	minFailureDuration  time.Duration
-	maxFailureDuration  time.Duration
-}
-
-type connection struct { // TODO remove
-	failureChance                   float64
-	dropChance                      float64
-	duplicationChance               float64
-	maxDuplicates                   int32
-	multipleDuplicateChanceModifier float64
-	corruptionChance                float64
-	corruptionSeverity              float64
-	meanLatency                     time.Duration
-	minLatency                      time.Duration
-	maxLatency                      time.Duration
-}
-
 func newInstance(receiver chan simutils.SimPacket) Instance {
 	return Instance{
 		Id:                  "sim_",
@@ -129,18 +105,16 @@ func newRelay(receiver chan simutils.SimPacket) (r Relay) {
 }
 
 var (
-	log                   *zap.Logger
-	receiver              chan simutils.SimPacket
-	globalModifyMsg       func(packet simutils.SimPacket) simutils.SimPacket
-	simConnectors         []*simutils.SimConnector
-	ExpectedWaitQueueSize *atomic.Int32
-	waitingConnections    *atomic.Int32
-	loopWaitDuration      time.Duration
-	loopSpinThreshold     int
-	scanner               *bufio.Scanner
-	timeRequests          chan simutils.TimeRequest
-	waitRequests          chan simutils.WaitRequest
-	deadlineRequests      chan simutils.DeadlineRequest
+	log               *zap.Logger
+	receiver          chan simutils.SimPacket
+	globalModifyMsg   func(packet simutils.SimPacket) simutils.SimPacket
+	simConnectors     []*simutils.SimConnector
+	loopWaitDuration  time.Duration
+	loopSpinThreshold int
+	scanner           *bufio.Scanner
+	timeRequests      chan simutils.TimeRequest
+	waitRequests      chan simutils.WaitRequest
+	deadlineRequests  chan simutils.DeadlineRequest
 )
 
 func RunSimulation(configFile string, logger *zap.Logger) {
@@ -165,13 +139,11 @@ func RunSimulation(configFile string, logger *zap.Logger) {
 	// Set up file package vars
 	simConnectors = make([]*simutils.SimConnector, 0, len(cfg.Clients)+len(cfg.Relays)+len(cfg.Servers)+len(cfg.Tools))
 	scanner = bufio.NewScanner(os.Stdin)
-	ExpectedWaitQueueSize = &atomic.Int32{}
-	waitingConnections = &atomic.Int32{}
 
 	// Standard NOP packet modification in message handler
 	globalModifyMsg = NOPModifyMsgCopy
 
-	// Bare-bones message handler to pass messages around
+	// Message handler to pass messages around
 	go func() {
 		log.Info("\u001B[34mMessage handler started\u001B[0m")
 		receiver = make(chan simutils.SimPacket)
@@ -211,7 +183,6 @@ func RunSimulation(configFile string, logger *zap.Logger) {
 			}
 			log.Warn("Targeted address does not exist (yet), message dropped",
 				zap.String("target", msgTargetAddr.String()))
-			//ExpectedWaitQueueSize.Add(-1)
 		}
 		log.Info("\u001B[34mMessage handler terminating\u001B[0m")
 	}()
@@ -219,7 +190,7 @@ func RunSimulation(configFile string, logger *zap.Logger) {
 	for receiver == nil {
 	} // Wait for message handler to be ready
 
-	// Sketch for a time handler providing true time
+	// Time handler provides true time and handles waiting/sleeping
 	go func() {
 		log.Info("Time handler started")
 		now := time.Unix(10000, 0)
@@ -275,39 +246,33 @@ func RunSimulation(configFile string, logger *zap.Logger) {
 					if scanner.Text() != "p" {
 						continue
 					}
-					loopsWaiting = 0
-					//log.Info("When this message appears, 'waiting sleepers' + 'waiting connections' should be exactly equal to 'expected to wait'")
-					//log.Info("And when you enter w, nothing should happen until this log message appears again")
-					//log.Info("Enter 'w' to wait one loop for other goroutines or enter 'p' to process the next request in the queue (q for os.Exit(0))")
-					//scanner.Scan()
-					//if scanner.Text() == "q" {
-					//	os.Exit(0)
-					//}
-					//if scanner.Text() != "p" {
-					//	continue
-					//}
-					minDuration := time.Hour
-					minIndex := 10000000
-					for i, request := range currentlyWaiting {
-						if request.WaitDuration < minDuration {
-							minIndex = i
-							minDuration = request.WaitDuration
-						}
-					}
-					log.Info("\u001B[41mHandling the next waiting request\u001B[0m", zap.Duration("after (simulated time)", minDuration))
-					shortestRequest := currentlyWaiting[minIndex]
-					currentlyWaiting = append(currentlyWaiting[:minIndex], currentlyWaiting[minIndex+1:]...)
-					for i := range currentlyWaiting {
-						if currentlyWaiting[i].WaitDuration > minDuration {
-							currentlyWaiting[i].WaitDuration -= minDuration
-						} else {
-							currentlyWaiting[i].WaitDuration = 0
-						}
-					}
-					now = now.Add(minDuration)
-					log.Debug("Time handler unblocks a sleeper", zap.String("id", shortestRequest.Id), zap.Time("updated time", now))
-					shortestRequest.Action()
 				}
+				minDuration := time.Hour
+				minIndex := 10000000
+				for i, request := range currentlyWaiting {
+					if request.WaitDuration < minDuration {
+						minIndex = i
+						minDuration = request.WaitDuration
+					}
+				}
+				log.Info("\u001B[41mHandling the next waiting request\u001B[0m", zap.Duration("after (simulated time)", minDuration))
+				shortestRequest := currentlyWaiting[minIndex]
+				currentlyWaiting = append(currentlyWaiting[:minIndex], currentlyWaiting[minIndex+1:]...)
+				for i := range currentlyWaiting {
+					if currentlyWaiting[i].WaitDuration > minDuration {
+						currentlyWaiting[i].WaitDuration -= minDuration
+					} else {
+						currentlyWaiting[i].WaitDuration = 0
+					}
+				}
+				now = now.Add(minDuration)
+				log.Debug(
+					"Time handler unblocks a sleeper",
+					zap.String("id", shortestRequest.Id),
+					zap.Time("requested at", shortestRequest.ReceivedAt),
+					zap.Time("updated time", now),
+				)
+				shortestRequest.Action(shortestRequest.ReceivedAt, now)
 			}
 		}
 	}()
@@ -319,7 +284,6 @@ func RunSimulation(configFile string, logger *zap.Logger) {
 	simServers := make([]Server, len(cfg.Servers))
 
 	for i, simServer := range cfg.Servers {
-		ExpectedWaitQueueSize.Add(1) // TODO remove
 		log.Debug("adding waiter server setup")
 
 		tmp := serverSetUp(i, simServer)
@@ -337,7 +301,6 @@ func RunSimulation(configFile string, logger *zap.Logger) {
 	simRelays := make([]Relay, len(cfg.Relays))
 
 	for i, relay := range cfg.Relays {
-		ExpectedWaitQueueSize.Add(1)
 		log.Debug("adding waiter relay setup")
 
 		tmp := relaySetUp(i, relay)
@@ -354,7 +317,6 @@ func RunSimulation(configFile string, logger *zap.Logger) {
 		zap.Int("amount", len(cfg.Clients)))
 	simClients := make([]Client, len(cfg.Clients))
 	for i, clnt := range cfg.Clients {
-		ExpectedWaitQueueSize.Add(1)
 		log.Debug("adding waiter client setup")
 
 		tmp := clientSetUp(i, clnt)
@@ -368,7 +330,6 @@ func RunSimulation(configFile string, logger *zap.Logger) {
 	log.Info("\u001B[34mSetup completed\u001B[0m")
 
 	for i, tool := range cfg.Tools {
-		ExpectedWaitQueueSize.Add(1)
 		log.Debug("adding waiter tool setup")
 		log.Info("\u001B[34mRunning Tool\u001B[0m", zap.Int("tool", i))
 
@@ -418,7 +379,6 @@ func pauseSetUp(instance SimSvcConfig, instanceType string, i int) {
 	<-unblockChan
 	close(unblockChan)
 	log.Debug("removing waiter in setup for " + instanceType)
-	//ExpectedWaitQueueSize.Add(-1)
 }
 
 func runTool(i int, tool SimSvcConfig) {
@@ -545,9 +505,6 @@ func relaySetUp(i int, relay SimSvcConfig) Relay {
 			zap.Int("number of peers", len(netClocks)))
 	}
 	log.Debug("Clock syncs active")
-	log.Debug("\u001B[34mPress Enter to continue to relay start\u001B[0m")
-	//scanner.Scan()
-	// Relay starting
 	log.Info("Starting relay", zap.String("id", tmp.Id))
 	localAddr.Host.Port = ntp.ServerPortSCION
 	dscp := core.Dscp(relay.SvcConfig)
@@ -582,22 +539,16 @@ func serverSetUp(i int, simServer SimSvcConfig) Server {
 	syncClks.Id = tmp.Id
 	tmp.SyncClks = syncClks
 	if len(refClocks) != 0 {
-		log.Debug("Found reference clocks, adding waiters", zap.Int("amount", len(refClocks)))
-		//ExpectedWaitQueueSize.Add(int32(len(refClocks))) // TODO remove
+		log.Debug("Found reference clocks", zap.Int("amount", len(refClocks)))
 		sync.SyncToRefClocks(log, simClk, syncClks)
-		//ExpectedWaitQueueSize.Add(int32(-len(refClocks)))
 		go sync.RunLocalClockSync(log, simClk, syncClks)
 	}
 
 	if len(netClocks) != 0 {
-		log.Debug("Found net clocks, NOT adding waiters", zap.Int("amount", len(netClocks)))
-		//ExpectedWaitQueueSize.Add(int32(len(netClocks)))
+		log.Debug("Found net clocks", zap.Int("amount", len(netClocks)))
 		go sync.RunGlobalClockSync(log, simClk, syncClks)
 	}
 	log.Debug("Clock sync active")
-	log.Debug("\u001B[34mPress Enter to continue to server start\u001B[0m")
-	//scanner.Scan()
-	// Server starting
 	log.Info("Starting server", zap.String("id", tmp.Id))
 	localAddr.Host.Port = ntp.ServerPortSCION
 	dscp := core.Dscp(simServer.SvcConfig)
