@@ -26,13 +26,12 @@ const maxNumberOfInstances = 30
 // "CONSTANTS"
 
 var NOPModifyMsg = func(_ *simutils.SimPacket) {}
-var NOPModifyMsgCopy = func(packet simutils.SimPacket) simutils.SimPacket {
-	return packet
-}
-var DefineDefaultLatency = func(_ *net.UDPAddr) time.Duration { return 2 * time.Millisecond }
+var NOPModifyMsgCopy = func(packet simutils.SimPacket) simutils.SimPacket { return packet }
 var NOPModifyTime = func(t time.Time) time.Time { return t }
-var AddOneSecond = func(t time.Time) time.Time { return t.Add(time.Second) }
+var NOPModifyDuration = func(d time.Duration) time.Duration { return d }
 var NOPAdjustFunc = func(_ *simutils.SimClock, _, _ time.Duration, _ float64) {}
+var DefineDefaultLatency = func(_ *net.UDPAddr) time.Duration { return 2 * time.Millisecond }
+var AddOneSecond = func(t time.Time) time.Time { return t.Add(time.Second) }
 
 type SimConfigFile struct {
 	TimeHandlerWaitDuration  string         `toml:"time_handler_wait_duration"`
@@ -422,7 +421,7 @@ func runTool(i int, tool SimSvcConfig) {
 
 	ensureConfigCompatibility(&tool)
 
-	lclk := simutils.NewSimulationClock(log, id, AddOneSecond, NOPAdjustFunc, timeRequests, waitRequests, ExpectedWaitQueueSize)
+	lclk := simutils.NewSimulationClock(log, id, AddOneSecond, NOPModifyDuration, NOPAdjustFunc, timeRequests, waitRequests)
 
 	var laddr udp.UDPAddr
 	var raddr udp.UDPAddr
@@ -467,7 +466,7 @@ func clientSetUp(i int, clnt SimSvcConfig) Client {
 
 	ensureConfigCompatibility(&clnt)
 
-	simClk := simutils.NewSimulationClock(log, tmp.Id, NOPModifyTime, NOPAdjustFunc, timeRequests, waitRequests, ExpectedWaitQueueSize)
+	simClk := simutils.NewSimulationClock(log, tmp.Id, NOPModifyTime, NOPModifyDuration, NOPAdjustFunc, timeRequests, waitRequests)
 	tmp.LocalClk = simClk
 
 	laddr := core.LocalAddress(clnt.SvcConfig)
@@ -513,7 +512,7 @@ func relaySetUp(i int, relay SimSvcConfig) Relay {
 
 	ensureConfigCompatibility(&relay)
 
-	simClk := simutils.NewSimulationClock(log, tmp.Id, NOPModifyTime, NOPAdjustFunc, timeRequests, waitRequests, ExpectedWaitQueueSize)
+	simClk := simutils.NewSimulationClock(log, tmp.Id, NOPModifyTime, NOPModifyDuration, NOPAdjustFunc, timeRequests, waitRequests)
 	tmp.LocalClk = simClk
 
 	localAddr := core.LocalAddress(relay.SvcConfig)
@@ -559,7 +558,7 @@ func serverSetUp(i int, simServer SimSvcConfig) Server {
 
 	ensureConfigCompatibility(&simServer)
 
-	simClk := simutils.NewSimulationClock(log, tmp.Id, NOPModifyTime, NOPAdjustFunc, timeRequests, waitRequests, ExpectedWaitQueueSize)
+	simClk := simutils.NewSimulationClock(log, tmp.Id, NOPModifyTime, NOPModifyDuration, NOPAdjustFunc, timeRequests, waitRequests)
 	tmp.LocalClk = simClk
 
 	localAddr := core.LocalAddress(simServer.SvcConfig)

@@ -5,32 +5,31 @@ import (
 	"go.uber.org/zap"
 	"golang.org/x/net/context"
 	"math"
-	"sync/atomic"
 	"time"
 
 	"example.com/scion-time/base/timebase"
 )
 
 type SimClock struct {
-	Id                    string                                           // Identifier string, ends in "_clk"
-	Log                   *zap.Logger                                      // Logger
-	ModifyTime            func(time time.Time) time.Time                   // Called to modify the true time before returning for Now()
-	AdjustFunc            func(c *SimClock, o, d time.Duration, f float64) // Function called within Adjust() method
-	timeRequest           chan TimeRequest                                 // Channel to send TimeRequest to
-	WaitRequest           chan WaitRequest                                 // Channel to send WaitRequest to
-	epoch                 uint64                                           // Used internally for the Epoch() method
-	ExpectedWaitQueueSize *atomic.Int32                                    // TODO remove this in this branch
+	Id          string                                           // Identifier string, ends in "_clk"
+	Log         *zap.Logger                                      // Logger
+	ModifyTime  func(time time.Time) time.Time                   // Called to modify the true time before returning for Now()
+	ModifySleep func(d time.Duration) time.Duration              // Called to modify the sleep duration
+	AdjustFunc  func(c *SimClock, o, d time.Duration, f float64) // Function called within Adjust() method
+	timeRequest chan TimeRequest                                 // Channel to send TimeRequest to
+	WaitRequest chan WaitRequest                                 // Channel to send WaitRequest to
+	epoch       uint64                                           // Used internally for the Epoch() method
 }
 
-func NewSimulationClock(log *zap.Logger, id string, ModifyTime func(t time.Time) time.Time, AdjustFunc func(c *SimClock, o time.Duration, d time.Duration, f float64), timeRequest chan TimeRequest, waitRequest chan WaitRequest, ExpectedWaitQueueSize *atomic.Int32) *SimClock {
+func NewSimulationClock(log *zap.Logger, id string, ModifyTime func(t time.Time) time.Time, ModifySleep func(d time.Duration) time.Duration, AdjustFunc func(c *SimClock, o time.Duration, d time.Duration, f float64), timeRequest chan TimeRequest, waitRequest chan WaitRequest) *SimClock {
 	return &SimClock{
-		Id:                    id + "_clk",
-		Log:                   log,
-		ModifyTime:            ModifyTime,
-		AdjustFunc:            AdjustFunc,
-		timeRequest:           timeRequest,
-		WaitRequest:           waitRequest,
-		ExpectedWaitQueueSize: ExpectedWaitQueueSize,
+		Id:          id + "_clk",
+		Log:         log,
+		ModifyTime:  ModifyTime,
+		ModifySleep: ModifySleep,
+		AdjustFunc:  AdjustFunc,
+		timeRequest: timeRequest,
+		WaitRequest: waitRequest,
 	}
 }
 
@@ -74,12 +73,12 @@ func (c SimClock) Adjust(offset, duration time.Duration, frequency float64) {
 
 func (c SimClock) Sleep(duration time.Duration) {
 	c.Log.Debug("SimClock sleeping", zap.String("id", c.Id), zap.Duration("duration", duration))
-	// TODO maybe add a function ModifyDuration
 	unblockChan := make(chan struct{})
-	unblock := func() {
+	unblock := func(_, _ time.Time) {
 		unblockChan <- struct{}{}
 	}
-	c.WaitRequest <- WaitRequest{Id: c.Id, WaitDuration: duration, Action: unblock}
+	sleepDuration := c.ModifySleep(duration)
+	c.WaitRequest <- WaitRequest{Id: c.Id, WaitDuration: sleepDuration, Action: unblock}
 	<-unblockChan
 	close(unblockChan)
 }
