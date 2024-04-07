@@ -1,7 +1,6 @@
 package simulation
 
 import (
-	"bufio"
 	"context"
 	"example.com/scion-time/core"
 	"example.com/scion-time/core/client"
@@ -19,8 +18,6 @@ import (
 	"strconv"
 	"time"
 )
-
-const maxNumberOfInstances = 30
 
 // "CONSTANTS"
 
@@ -106,15 +103,13 @@ func newRelay(receiver chan simutils.SimPacket) (r Relay) {
 
 var (
 	log               *zap.Logger
+	timeHandler       *simutils.TimeHandler
+	messageHandler    *simutils.MessageHandler
 	receiver          chan simutils.SimPacket
-	globalModifyMsg   func(packet simutils.SimPacket) simutils.SimPacket
-	simConnectors     []*simutils.SimConnector
 	loopWaitDuration  time.Duration
 	loopSpinThreshold int
-	scanner           *bufio.Scanner
 	timeRequests      chan simutils.TimeRequest
 	waitRequests      chan simutils.WaitRequest
-	deadlineRequests  chan simutils.DeadlineRequest
 )
 
 func RunSimulation(configFile string, logger *zap.Logger) {
@@ -134,138 +129,28 @@ func RunSimulation(configFile string, logger *zap.Logger) {
 		loopWaitDuration = 5 * time.Millisecond
 	}
 	loopSpinThreshold = cfg.TimeHandlerSpinThreshold
-	log.Info("Time handler configuration", zap.Duration("loop wait duration", loopWaitDuration), zap.Int("loop spin amount", loopSpinThreshold))
+	if loopSpinThreshold == 0 {
+		log.Warn("time_handler_spin_threshold is 0, falling back to default 5")
+	}
+	log.Info(
+		"Time handler configuration",
+		zap.Duration("loop wait duration", loopWaitDuration),
+		zap.Int("loop spin amount", loopSpinThreshold),
+		zap.Bool("manual stepping", cfg.ManualTimeHandlerStep),
+	)
 
-	// Set up file package vars
-	simConnectors = make([]*simutils.SimConnector, 0, len(cfg.Clients)+len(cfg.Relays)+len(cfg.Servers)+len(cfg.Tools))
-	scanner = bufio.NewScanner(os.Stdin)
+	numInstances := len(cfg.Clients) + len(cfg.Relays) + len(cfg.Servers) + len(cfg.Tools)
 
-	// Standard NOP packet modification in message handler
-	globalModifyMsg = NOPModifyMsgCopy
+	timeRequests, waitRequests, timeHandler = simutils.NewTimeHandler(log, loopSpinThreshold, loopWaitDuration, cfg.ManualTimeHandlerStep)
 
-	// Message handler to pass messages around
-	go func() {
-		log.Info("\u001B[34mMessage handler started\u001B[0m")
-		receiver = make(chan simutils.SimPacket)
-	skip:
-		for msg := range receiver {
-			log.Debug(
-				"Message handler received message",
-				zap.Binary("msg", msg.B),
-				zap.String("target", msg.TargetAddr.String()),
-				zap.String("source", msg.SourceAddr.String()),
-			)
-			// Ensure the simConn's local address and the messages target address have the same format
-			msgTargetAddr := msg.TargetAddr.Addr().WithZone("").Unmap()
-			for _, simConn := range simConnectors {
-				laddrPort := simConn.LocalAddress.Host.AddrPort()
-				simConnLocalAddress := laddrPort.Addr().WithZone("").Unmap()
-				if simConnLocalAddress == msgTargetAddr {
-					// necessary, otherwise the function will use the current simConn and msg during its execution instead of creation (what we want)
-					tmp := *simConn
-					tmpMsg := globalModifyMsg(msg)
-					passOn := func(r, n time.Time) { // Create a function that will pass the message into the simConn's input channel
-						tmp.Input <- tmpMsg
-						log.Debug(
-							"Passed message on to instance",
-							zap.String("receiving connector id", tmp.Id),
-							zap.Stringer("source addr", tmpMsg.SourceAddr),
-							zap.Duration("after", tmpMsg.Latency),
-						)
-					}
-					waitRequests <- simutils.WaitRequest{ // Request the passOn function to be executed after the duration specified in the message
-						Id:           simConn.Id + "_msg",
-						WaitDuration: msg.Latency,
-						Action:       passOn,
-					}
-					continue skip // Break out of both for loops
-				}
-			}
-			log.Warn("Targeted address does not exist (yet), message dropped",
-				zap.String("target", msgTargetAddr.String()))
-		}
-		log.Info("\u001B[34mMessage handler terminating\u001B[0m")
-	}()
+	go timeHandler.Start()
 
-	for receiver == nil {
-	} // Wait for message handler to be ready
+	time.Sleep(time.Millisecond) // Wait for handlers to be ready
 
-	// Time handler provides true time and handles waiting/sleeping
-	go func() {
-		log.Info("Time handler started")
-		now := time.Unix(10000, 0)
-		loopsWaiting := 0
-		currentlyWaiting := make([]simutils.WaitRequest, 0, maxNumberOfInstances)
-		timeRequests = make(chan simutils.TimeRequest)
-		waitRequests = make(chan simutils.WaitRequest)
-		deadlineRequests = make(chan simutils.DeadlineRequest)
-		for {
-			select {
-			case req := <-timeRequests:
-				log.Debug("Time has been requested", zap.String("by", req.Id), zap.Time("time", now))
-				loopsWaiting = 0
-				req.ReturnChan <- now
-			case req := <-waitRequests:
-				if !req.WaitDeadline.IsZero() {
-					req.WaitDuration = req.WaitDeadline.Sub(now)
-				}
-				log.Debug("Wait has been requested", zap.String("by", req.Id), zap.Time("at", now), zap.Duration("duration", req.WaitDuration))
-				loopsWaiting = 0
-				req.ReceivedAt = now
-				currentlyWaiting = append(currentlyWaiting, req)
-			default:
-				time.Sleep(loopWaitDuration)
-				if len(currentlyWaiting) <= 0 {
-					continue // No need to consider stepping ahead if nothing is waiting yet
-				}
-				loopsWaiting += 1
-				if loopsWaiting <= loopSpinThreshold {
-					continue // Haven't waited long enough, don't step yet
-				}
-				loopsWaiting = 0
-				if cfg.ManualTimeHandlerStep { // If the manual flag is set in the config, wait for input before stepping
-					log.Info("Enter 'w' to wait one loop for other goroutines or enter 'p' to process the next request in the queue (q for os.Exit(0))")
-					log.Info("If other log messages appear when entering 'w', the time_handler_wait_duration and _spin_amount values are too small")
-					scanner.Scan()
-					if scanner.Text() == "q" {
-						os.Exit(0)
-					}
-					if scanner.Text() != "p" {
-						continue
-					}
-				}
-				minDuration := time.Hour
-				minIndex := 10000000
-				for i, request := range currentlyWaiting {
-					if request.WaitDuration < minDuration {
-						minIndex = i
-						minDuration = request.WaitDuration
-					}
-				}
-				log.Info("\u001B[41mHandling the next waiting request\u001B[0m", zap.Duration("after (simulated time)", minDuration))
-				shortestRequest := currentlyWaiting[minIndex]
-				currentlyWaiting = append(currentlyWaiting[:minIndex], currentlyWaiting[minIndex+1:]...)
-				for i := range currentlyWaiting {
-					if currentlyWaiting[i].WaitDuration > minDuration {
-						currentlyWaiting[i].WaitDuration -= minDuration
-					} else {
-						currentlyWaiting[i].WaitDuration = 0
-					}
-				}
-				now = now.Add(minDuration)
-				log.Debug(
-					"Time handler unblocks a sleeper",
-					zap.String("id", shortestRequest.Id),
-					zap.Time("requested at", shortestRequest.ReceivedAt),
-					zap.Time("updated time", now),
-				)
-				shortestRequest.Action(shortestRequest.ReceivedAt, now)
-			}
-		}
-	}()
+	receiver, messageHandler = simutils.NewMessageHandler(log, numInstances, NOPModifyMsgCopy, &waitRequests)
+	go messageHandler.Start()
 
-	for deadlineRequests == nil {
-	} // Wait for time handler to be ready
+	time.Sleep(time.Millisecond) // Wait for handlers to be ready
 
 	log.Info("\u001B[34mSetting up Servers, press c to time handler to start\u001B[0m", zap.Int("amount", len(cfg.Servers)))
 	simServers := make([]Server, len(cfg.Servers))
@@ -392,7 +277,7 @@ func runTool(i int, tool SimSvcConfig) {
 	raddr = udp.UDPAddrFromSnet(&raddrSNET)
 
 	simConnector := simutils.NewSimConnector(log, id, &laddrSNET, receiver, waitRequests, NOPModifyMsg, NOPModifyMsg, DefineDefaultLatency)
-	simConnectors = append(simConnectors, simConnector)
+	messageHandler.AddSimConnector(simConnector)
 
 	simCrypt := simutils.NewSimCrypto(tool.Seed, log)
 
@@ -424,7 +309,7 @@ func clientSetUp(i int, clnt SimSvcConfig) Client {
 
 	laddr := core.LocalAddress(clnt.SvcConfig)
 	simNet := simutils.NewSimConnector(log, tmp.Id, laddr, receiver, waitRequests, NOPModifyMsg, NOPModifyMsg, DefineDefaultLatency)
-	simConnectors = append(simConnectors, simNet)
+	messageHandler.AddSimConnector(simNet)
 
 	simCrypt := simutils.NewSimCrypto(clnt.Seed, log)
 
@@ -470,7 +355,7 @@ func relaySetUp(i int, relay SimSvcConfig) Relay {
 
 	localAddr := core.LocalAddress(relay.SvcConfig)
 	simNet := simutils.NewSimConnector(log, tmp.Id, localAddr, receiver, waitRequests, NOPModifyMsg, NOPModifyMsg, DefineDefaultLatency)
-	simConnectors = append(simConnectors, simNet)
+	messageHandler.AddSimConnector(simNet)
 
 	simCrypt := simutils.NewSimCrypto(relay.Seed, log)
 
@@ -513,7 +398,7 @@ func serverSetUp(i int, simServer SimSvcConfig) Server {
 
 	localAddr := core.LocalAddress(simServer.SvcConfig)
 	simNet := simutils.NewSimConnector(log, tmp.Id, localAddr, receiver, waitRequests, NOPModifyMsg, NOPModifyMsg, DefineDefaultLatency)
-	simConnectors = append(simConnectors, simNet)
+	messageHandler.AddSimConnector(simNet)
 
 	simCrypt := simutils.NewSimCrypto(simServer.Seed, log)
 
