@@ -32,15 +32,6 @@ const (
 
 type localReferenceClock struct{}
 
-//var ( // TODO remove
-//	refClks       []client.ReferenceClock
-//	refClkOffsets []time.Duration
-//	refClkClient  client.ReferenceClockClient
-//	netClks       []client.ReferenceClock
-//	netClkOffsets []time.Duration
-//	netClkClient  client.ReferenceClockClient
-//)
-
 type SyncableClocks struct {
 	refClks       []client.ReferenceClock
 	refClkOffsets []measurements.Measurement
@@ -72,7 +63,6 @@ func RegisterClocks(refClocks, netClocks []client.ReferenceClock) *SyncableClock
 
 func (c *SyncableClocks) measureOffsetToRefClocks(log *zap.Logger, lclk timebase.LocalClock, timeout time.Duration) (
 	time.Time, time.Duration) {
-	// log.Debug("Measuring offset to reference clocks", zap.String("clock holder id", c.Id)) // TODO REMOVE
 	ctx, cancel := contextcore.WithTimeout(lclk, context.Background(), timeout)
 	defer cancel()
 	c.refClkClient.MeasureClockOffsets(ctx, log, c.refClks, c.refClkOffsets)
@@ -102,13 +92,14 @@ func RunLocalClockSync(log *zap.Logger, lclk timebase.LocalClock, syncClks *Sync
 		panic("invalid reference clock max correction")
 	}
 	name := metrics.SyncLocalCorrN
+	help := metrics.SyncLocalCorrH
 	if simClk, ok := lclk.(*simutils.SimClock); ok {
 		log.Debug("SimClock detected, adding id to prometheus gauge", zap.String("id", simClk.Id))
 		name += simClk.Id
 	}
 	corrGauge := promauto.NewGauge(prometheus.GaugeOpts{
 		Name: name,
-		Help: metrics.SyncLocalCorrH, // TODO do like below
+		Help: help,
 	})
 	pll := newPLL(log, lclk)
 	for {
@@ -128,11 +119,9 @@ func RunLocalClockSync(log *zap.Logger, lclk timebase.LocalClock, syncClks *Sync
 
 func (c *SyncableClocks) measureOffsetToNetClocks(log *zap.Logger, lclk timebase.LocalClock, timeout time.Duration) (
 	time.Time, time.Duration) {
-	// log.Debug("\033[47mMeasuring offset to net clocks\033[0m", zap.String("clock holder id", c.Id), zap.Int("num net clks", len(c.netClks))) // TODO REMOVE
 	ctx, cancel := contextcore.WithTimeout(lclk, context.Background(), timeout)
 	defer cancel()
 	c.netClkClient.MeasureClockOffsets(ctx, log, c.netClks, c.netClkOffsets)
-	//log.Debug("\033[47mFinished measuring offset to net clocks\033[0m", zap.String("clock holder id", c.Id)) // TODO REMOVE
 	m := measurements.FaultTolerantMidpoint(c.netClkOffsets)
 	return m.Timestamp, m.Offset
 }

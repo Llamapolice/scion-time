@@ -7,13 +7,13 @@ import (
 	"example.com/scion-time/net/udp"
 	"github.com/libp2p/go-reuseport"
 	"github.com/scionproto/scion/pkg/daemon"
-	"go.uber.org/zap"
+	"log/slog"
 	"net"
 	"time"
 )
 
 type UDPConnector struct {
-	Log *zap.Logger
+	Log *slog.Logger
 }
 
 func (U *UDPConnector) NewDaemonConnector(ctx context.Context, daemonAddr string) daemon.Connector {

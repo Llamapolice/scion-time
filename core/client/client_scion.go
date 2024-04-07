@@ -327,8 +327,7 @@ func (c *SCIONClient) measureClockOffsetSCION(ctx context.Context, log *zap.Logg
 	cTxTime1, id, err := c.ConnectionProvider.ReadTXTimestamp(conn)
 	if err != nil || id != 0 {
 		cTxTime1 = c.Lclk.Now()
-		// TODO put this back
-		//log.Error("failed to read packet tx timestamp, falling back to local clock", zap.Error(err))
+		log.Error("failed to read packet tx timestamp, falling back to local clock", zap.Error(err))
 	}
 	mtrcs.reqsSent.Inc()
 	if interleavedReq {
@@ -363,8 +362,7 @@ func (c *SCIONClient) measureClockOffsetSCION(ctx context.Context, log *zap.Logg
 		cRxTime, err := udp.TimestampFromOOBData(oob)
 		if err != nil {
 			cRxTime = c.Lclk.Now()
-			// TODO put this back
-			//log.Error("failed to read packet rx timestamp from oob, falling back to local clock", zap.Error(err))
+			log.Error("failed to read packet rx timestamp from oob, falling back to local clock", zap.Error(err))
 		}
 		buf = buf[:n]
 		mtrcs.pktsReceived.Inc()

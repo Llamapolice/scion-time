@@ -34,7 +34,6 @@ func NewSimulationClock(log *zap.Logger, id string, ModifyTime func(t time.Time)
 }
 
 func (c SimClock) Epoch() uint64 {
-	//TODO implement me
 	return c.epoch
 }
 
@@ -86,13 +85,14 @@ func (c SimClock) Sleep(duration time.Duration) {
 var _ timebase.LocalClock = (*SimClock)(nil)
 
 type SimReferenceClock struct {
-	Id string
+	Id  string
+	Log *zap.Logger
 }
 
-func (s *SimReferenceClock) MeasureClockOffset(ctx context.Context, log *zap.Logger) (time.Duration, error) {
+func (s *SimReferenceClock) MeasureClockOffset(ctx context.Context) (time.Time, time.Duration, error) {
 	// TODO this is an empty implementation currently, same output as localReferenceClock
-	log.Debug("Measuring SimRefClk offset", zap.String("id", s.Id))
-	return 0, nil
+	s.Log.Debug("Measuring SimRefClk offset", zap.String("id", s.Id))
+	return time.Unix(0, 0), 0, nil
 }
 
 var _ client.ReferenceClock = (*SimReferenceClock)(nil)

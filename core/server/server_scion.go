@@ -31,10 +31,6 @@ import (
 	"example.com/scion-time/net/udp"
 )
 
-const (
-	scionServerNumGoroutine = 1 // Changed for slimmer simulation TODO back to 8
-)
-
 type scionServerMetrics struct {
 	pktsReceived      prometheus.Counter
 	pktsForwarded     prometheus.Counter
@@ -143,8 +139,7 @@ func runSCIONServer(
 		if err != nil {
 			oob = oob[:0]
 			rxt = lclk.Now()
-			// TODO put this back
-			//log.Error("failed to read packet rx timestamp from oob, falling back to local clock", zap.Error(err))
+			log.Error("failed to read packet rx timestamp from oob, falling back to local clock", zap.Error(err))
 		}
 		buf = buf[:n]
 		mtrcs.pktsReceived.Inc()
@@ -228,7 +223,7 @@ func runSCIONServer(
 			}
 			_, id, err := lnet.ReadTXTimestamp(conn)
 			if err != nil {
-				//log.Error("failed to read packet tx timestamp", zap.Error(err)) // TODO this was cluttering logs
+				log.Error("failed to read packet tx timestamp", zap.Error(err))
 			} else if id != txID {
 				log.Error("failed to read packet tx timestamp", zap.Uint32("id", id), zap.Uint32("expected", txID))
 				txID = id + 1
@@ -463,7 +458,7 @@ func runSCIONServer(
 			txt1, id, err := lnet.ReadTXTimestamp(conn)
 			if err != nil {
 				txt1 = txt0
-				//log.Error("failed to read packet tx timestamp", zap.Error(err)) // TODO put this back
+				log.Error("failed to read packet tx timestamp", zap.Error(err))
 			} else if id != txID {
 				txt1 = txt0
 				log.Error("failed to read packet tx timestamp", zap.Uint32("id", id), zap.Uint32("expected", txID))
@@ -478,16 +473,7 @@ func runSCIONServer(
 	}
 }
 
-func StartSCIONServer(
-	ctx context.Context,
-	log *zap.Logger,
-	lclk timebase.LocalClock,
-	lnet netbase.ConnProvider,
-	daemonAddr string,
-	localHost *net.UDPAddr,
-	dscp uint8,
-	provider *ntske.Provider,
-) {
+func StartSCIONServer(ctx context.Context, log *zap.Logger, lclk timebase.LocalClock, lnet netbase.ConnProvider, daemonAddr string, localHost *net.UDPAddr, dscp uint8, provider *ntske.Provider, scionServerNumGoroutine int) {
 	log.Info("server listening via SCION",
 		zap.Stringer("ip", localHost.IP),
 		zap.Int("port", localHost.Port),
@@ -500,7 +486,7 @@ func StartSCIONServer(
 	localHostPort := localHost.Port
 	localHost.Port = scion.EndhostPort
 
-	// Is there some better way to solve this?
+	// TODO Is there some better way to solve this? (same in StartSCIONDispatcher)
 	id := strings.Map(func(r rune) rune {
 		if r == '.' || r == ':' {
 			return '_'

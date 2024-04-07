@@ -3,7 +3,6 @@ package client
 import (
 	"context"
 	"errors"
-	"example.com/scion-time/base/cryptobase"
 	"net"
 	"sync/atomic"
 	"time"
@@ -12,8 +11,7 @@ import (
 
 	"go.uber.org/zap"
 
-	"example.com/scion-time/base/timemath"
-	"example.com/scion-time/base/crypto"
+	"example.com/scion-time/base/cryptobase"
 	"example.com/scion-time/core/measurements"
 	"example.com/scion-time/net/scion"
 	"example.com/scion-time/net/udp"

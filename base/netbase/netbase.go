@@ -10,7 +10,6 @@ import (
 
 type Connection interface {
 	Close() error
-	//Write(b []byte) (n int, err error) // TODO remove
 	ReadMsgUDPAddrPort(buf []byte, oob []byte) (n int, oobn int, flags int, addr netip.AddrPort, err error)
 	WriteToUDPAddrPort(b []byte, addr netip.AddrPort) (int, error)
 	SetDeadline(t time.Time) error

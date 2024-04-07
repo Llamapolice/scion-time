@@ -2,21 +2,26 @@ package simulation
 
 import (
 	"context"
-	"example.com/scion-time/core"
-	"example.com/scion-time/core/client"
-	"example.com/scion-time/core/server"
-	"example.com/scion-time/core/sync"
-	"example.com/scion-time/net/ntp"
-	"example.com/scion-time/net/ntske"
-	"example.com/scion-time/net/udp"
-	"example.com/scion-time/simulation/simutils"
-	"github.com/scionproto/scion/pkg/snet"
-	"github.com/scionproto/scion/pkg/snet/path"
-	"go.uber.org/zap"
+	"log/slog"
 	"net"
 	"os"
 	"strconv"
 	"time"
+
+	"github.com/scionproto/scion/pkg/snet"
+	"github.com/scionproto/scion/pkg/snet/path"
+
+	"go.uber.org/zap"
+
+	"example.com/scion-time/core"
+	"example.com/scion-time/core/client"
+	"example.com/scion-time/core/server"
+	"example.com/scion-time/core/sync"
+	"example.com/scion-time/driver/mbg"
+	"example.com/scion-time/net/ntp"
+	"example.com/scion-time/net/ntske"
+	"example.com/scion-time/net/udp"
+	"example.com/scion-time/simulation/simutils"
 )
 
 // "CONSTANTS"
@@ -103,6 +108,7 @@ func newRelay(receiver chan simutils.SimPacket) (r Relay) {
 
 var (
 	log               *zap.Logger
+	slogger           *slog.Logger
 	timeHandler       *simutils.TimeHandler
 	messageHandler    *simutils.MessageHandler
 	receiver          chan simutils.SimPacket
@@ -114,12 +120,13 @@ var (
 
 func RunSimulation(configFile string, logger *zap.Logger) {
 	log = logger
+	slogger = slog.Default()
 	log.Info("\u001B[34mStarting simulation\u001B[0m")
 
 	// Some logic to read a config file and fill a settings struct
 	log.Debug("Reading config file", zap.String("config location", configFile))
 	var cfg SimConfigFile
-	core.LoadConfig(&cfg, configFile, log)
+	core.LoadConfig(&cfg, configFile)
 
 	// Set up time handler config
 	var err error
@@ -216,11 +223,11 @@ func RunSimulation(configFile string, logger *zap.Logger) {
 
 func convertMBGClocks(refClocks []client.ReferenceClock) {
 	for i := range refClocks {
-		if c, ok := refClocks[i].(*core.MbgReferenceClock); ok {
-			refClocks[i] = &simutils.SimReferenceClock{Id: c.Dev}
+		if _, ok := refClocks[i].(*mbg.ReferenceClock); ok {
+			refClocks[i] = &simutils.SimReferenceClock{Log: log}
 		}
 	}
-	// TODO also convert NTPReferenceClocks
+	// TODO also convert other types of clocks
 }
 
 func ensureConfigCompatibility(cfg *SimSvcConfig) {
@@ -289,7 +296,7 @@ func runTool(i int, tool SimSvcConfig) {
 	}
 
 	log.Debug("Tool setup complete, running offset measurement now", zap.String("id", id))
-	medianDuration, err := client.MeasureClockOffsetSCION(ctxClient, log, simCrypt, ntpcs, laddr, raddr, ps)
+	_, medianDuration, err := client.MeasureClockOffsetSCION(ctxClient, log, simCrypt, ntpcs, laddr, raddr, ps)
 	if err != nil {
 		log.Fatal("Tool had an error", zap.Error(err))
 	}
@@ -314,7 +321,7 @@ func clientSetUp(i int, clnt SimSvcConfig) Client {
 	simCrypt := simutils.NewSimCrypto(clnt.Seed, log)
 
 	laddr.Host.Port = 0
-	refClocks, netClocks := core.CreateClocks(clnt.SvcConfig, laddr, simClk, simNet, simCrypt, log)
+	refClocks, netClocks := core.CreateClocks(clnt.SvcConfig, laddr, simClk, simNet, simCrypt, slogger)
 	convertMBGClocks(refClocks)
 	syncClks := sync.RegisterClocks(refClocks, netClocks)
 	syncClks.Id = tmp.Id
@@ -362,7 +369,7 @@ func relaySetUp(i int, relay SimSvcConfig) Relay {
 	// Clock Sync
 	log.Debug("Starting clock sync")
 	localAddr.Host.Port = 0
-	refClocks, netClocks := core.CreateClocks(relay.SvcConfig, localAddr, simClk, simNet, simCrypt, log)
+	refClocks, netClocks := core.CreateClocks(relay.SvcConfig, localAddr, simClk, simNet, simCrypt, slogger)
 	convertMBGClocks(refClocks)
 	syncClks := sync.RegisterClocks(refClocks, netClocks)
 	syncClks.Id = tmp.Id
@@ -381,7 +388,7 @@ func relaySetUp(i int, relay SimSvcConfig) Relay {
 	localAddr.Host.Port = ntp.ServerPortSCION
 	dscp := core.Dscp(relay.SvcConfig)
 	daemonAddr := core.DaemonAddress(relay.SvcConfig)
-	server.StartSCIONServer(tmp.Ctx, log, simClk, simNet, daemonAddr, snet.CopyUDPAddr(localAddr.Host), dscp, tmp.Provider)
+	server.StartSCIONServer(tmp.Ctx, log, simClk, simNet, daemonAddr, snet.CopyUDPAddr(localAddr.Host), dscp, tmp.Provider, 1)
 
 	return tmp
 }
@@ -405,7 +412,7 @@ func serverSetUp(i int, simServer SimSvcConfig) Server {
 	// Clock Sync
 	log.Debug("Starting clock sync")
 	localAddr.Host.Port = 0
-	refClocks, netClocks := core.CreateClocks(simServer.SvcConfig, localAddr, simClk, simNet, simCrypt, log)
+	refClocks, netClocks := core.CreateClocks(simServer.SvcConfig, localAddr, simClk, simNet, simCrypt, slogger)
 	convertMBGClocks(refClocks)
 	syncClks := sync.RegisterClocks(refClocks, netClocks)
 	syncClks.Id = tmp.Id
@@ -425,7 +432,7 @@ func serverSetUp(i int, simServer SimSvcConfig) Server {
 	localAddr.Host.Port = ntp.ServerPortSCION
 	dscp := core.Dscp(simServer.SvcConfig)
 	daemonAddr := core.DaemonAddress(simServer.SvcConfig)
-	server.StartSCIONServer(tmp.Ctx, log, simClk, simNet, daemonAddr, snet.CopyUDPAddr(localAddr.Host), dscp, tmp.Provider)
+	server.StartSCIONServer(tmp.Ctx, log, simClk, simNet, daemonAddr, snet.CopyUDPAddr(localAddr.Host), dscp, tmp.Provider, 1)
 
 	return tmp
 }
