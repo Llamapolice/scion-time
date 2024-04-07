@@ -63,7 +63,7 @@ var (
 	log *zap.Logger
 )
 
-func initLogger(verbose bool) {
+func initLogger(verbose bool, outputFile string) {
 	c := zap.NewDevelopmentConfig()
 	c.EncoderConfig.EncodeLevel = zapcore.CapitalColorLevelEncoder // Add some color to the output based on log level
 	c.DisableStacktrace = true
@@ -91,6 +91,14 @@ func initLogger(verbose bool) {
 	log, err = c.Build()
 	if err != nil {
 		panic(err)
+	}
+	if outputFile != "" {
+		file, err := os.Create(outputFile)
+		if err == nil {
+			fileEncoder := zapcore.NewConsoleEncoder(c.EncoderConfig)
+			fileCore := zapcore.NewCore(fileEncoder, zapcore.Lock(zapcore.AddSync(file)), zapcore.DebugLevel)
+			log = zap.New(zapcore.NewTee(fileCore, log.Core()))
+		}
 	}
 }
 
@@ -461,6 +469,7 @@ func exitWithUsage() {
 func main() {
 	var (
 		verbose                 bool
+		logfile                 string
 		configFile              string
 		daemonAddr              string
 		localAddr               snet.UDPAddr
@@ -515,6 +524,7 @@ func main() {
 	drkeyFlags.Var(&drkeyClientAddr, "client", "Client address")
 
 	simulationFlags.StringVar(&configFile, "config", "", "Simulation config file")
+	simulationFlags.StringVar(&logfile, "logfile", "", "Path to a file logs will be saved to if not empty")
 	simulationFlags.Int64Var(&seed, "seed", 5, "Seed for the pseudorandom generation, defaults to 5")
 
 	if len(os.Args) < 2 {
@@ -525,14 +535,12 @@ func main() {
 	case simulationFlags.Name():
 		err := simulationFlags.Parse(os.Args[2:])
 		if err != nil || simulationFlags.NArg() != 0 {
-			//fmt.Println("NArg not 0")
 			exitWithUsage()
 		}
 		if configFile == "" {
-			//fmt.Println("configFile empty?")
 			exitWithUsage()
 		}
-		initLogger(true)
+		initLogger(true, logfile)
 		runSimulation(configFile)
 	case serverFlags.Name():
 		err := serverFlags.Parse(os.Args[2:])
@@ -545,7 +553,7 @@ func main() {
 		if profileCPU {
 			defer profile.Start(profile.CPUProfile).Stop()
 		}
-		initLogger(verbose)
+		initLogger(verbose, "")
 		runServer(configFile)
 	case relayFlags.Name():
 		err := relayFlags.Parse(os.Args[2:])
@@ -555,7 +563,7 @@ func main() {
 		if configFile == "" {
 			exitWithUsage()
 		}
-		initLogger(verbose)
+		initLogger(verbose, "")
 		runRelay(configFile)
 	case clientFlags.Name():
 		err := clientFlags.Parse(os.Args[2:])
@@ -565,7 +573,7 @@ func main() {
 		if configFile == "" {
 			exitWithUsage()
 		}
-		initLogger(verbose)
+		initLogger(verbose, "")
 		runClient(configFile)
 	case toolFlags.Name():
 		err := toolFlags.Parse(os.Args[2:])
@@ -592,7 +600,7 @@ func main() {
 				exitWithUsage()
 			}
 			ntskeServer := core.NtskeServerFromRemoteAddr(remoteAddrStr)
-			initLogger(verbose)
+			initLogger(verbose, "")
 			runSCIONTool(daemonAddr, dispatcherMode, &localAddr, &remoteAddr, uint8(dscp),
 				authModes, ntskeServer, ntskeInsecureSkipVerify)
 		} else {
@@ -603,7 +611,7 @@ func main() {
 				exitWithUsage()
 			}
 			ntskeServer := core.NtskeServerFromRemoteAddr(remoteAddrStr)
-			initLogger(verbose)
+			initLogger(verbose, "")
 			runIPTool(&localAddr, &remoteAddr, uint8(dscp),
 				authModes, ntskeServer, ntskeInsecureSkipVerify, periodic)
 		}
@@ -615,7 +623,7 @@ func main() {
 		if configFile == "" {
 			exitWithUsage()
 		}
-		initLogger(verbose)
+		initLogger(verbose, "")
 		runBenchmark(configFile)
 	case drkeyFlags.Name():
 		err := drkeyFlags.Parse(os.Args[2:])
@@ -626,7 +634,7 @@ func main() {
 			exitWithUsage()
 		}
 		serverMode := drkeyMode == "server"
-		initLogger(verbose)
+		initLogger(verbose, "")
 		runDRKeyDemo(daemonAddr, serverMode, &drkeyServerAddr, &drkeyClientAddr)
 	case "x":
 		runX()
