@@ -3,9 +3,6 @@ package main
 import (
 	"context"
 	"crypto/tls"
-	"example.com/scion-time/base/crypto"
-	"example.com/scion-time/core/cryptocore"
-	"example.com/scion-time/core/netcore"
 	"example.com/scion-time/driver/networking"
 	"net"
 	"os"
@@ -23,7 +20,7 @@ func TestTimeserviceNTSChrony(t *testing.T) {
 		t.Skip("set up and start chrony to run this integration test")
 	}
 
-	initLogger(true /* verbose */)
+	initLogger(true, "", true)
 	remoteAddr := "0-0,127.0.0.1:4460"
 	localAddr := "0-0,0.0.0.0:0"
 	ntskeServer := "127.0.0.1:4460"
@@ -45,11 +42,7 @@ func TestTimeserviceNTSChrony(t *testing.T) {
 	lclk := &clock.SystemClock{Log: log}
 	timecore.RegisterClock(lclk)
 
-	lcrypt := &crypto.SafeCrypto{}
-	cryptocore.RegisterCrypto(lcrypt)
-
 	lnet := &networking.UDPConnector{}
-	netcore.RegisterConnProvider(lnet)
 
 	laddr := localAddrSnet.Host
 	raddr := remoteAddrSnet.Host

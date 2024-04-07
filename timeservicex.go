@@ -11,7 +11,7 @@ import (
 )
 
 func runX() {
-	initLogger(true /* verbose */, "")
+	initLogger(true, "", true)
 
 	clk := &clock.SystemClock{Log: log}
 	log.Debug("local clock", zap.Stringer("now", clk.Now()))
