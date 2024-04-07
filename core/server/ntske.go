@@ -1,17 +1,19 @@
 package server
 
 import (
+	"context"
 	"errors"
+	"log/slog"
 	"net"
-
-	"go.uber.org/zap"
 
 	"example.com/scion-time/net/ntske"
 )
 
 var errNoCookie = errors.New("failed to add at least one cookie")
 
-func newNTSKEMsg(log *zap.Logger, localIP net.IP, localPort int, data *ntske.Data, provider *ntske.Provider) (ntske.ExchangeMsg, error) {
+func newNTSKEMsg(ctx context.Context, log *slog.Logger,
+	localIP net.IP, localPort int, data *ntske.Data, provider *ntske.Provider) (
+	ntske.ExchangeMsg, error) {
 	var msg ntske.ExchangeMsg
 	msg.AddRecord(ntske.NextProto{
 		NextProto: ntske.NTPv4,
@@ -32,10 +34,10 @@ func newNTSKEMsg(log *zap.Logger, localIP net.IP, localPort int, data *ntske.Dat
 	plaintextCookie.S2C = data.S2cKey
 	key := provider.Current()
 	addedCookie := false
-	for i := 0; i < 8; i++ {
+	for range 8 {
 		encryptedCookie, err := plaintextCookie.EncryptWithNonce(key.Value, key.ID)
 		if err != nil {
-			log.Info("failed to encrypt cookie", zap.Error(err))
+			log.LogAttrs(ctx, slog.LevelInfo, "failed to encrypt cookie", slog.Any("error", err))
 			continue
 		}
 

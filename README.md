@@ -61,7 +61,7 @@ $SCION_TIME_ROOT/timeservice tool -verbose -local 0-0,0.0.0.0 -remote 0-0,127.0.
 
 ## Installing prerequisites for a SCION test environment
 
-Reference platform: Ubuntu 22.04 LTS, Go 1.21.2
+Reference platform: Ubuntu 22.04 LTS, Go 1.22.2
 
 ```bash
 sudo apt-get update
@@ -73,10 +73,10 @@ On x86-64:
 
 ```bash
 sudo rm -rf /usr/local/go
-curl -LO https://golang.org/dl/go1.22.0.linux-amd64.tar.gz
-echo "f6c8a87aa03b92c4b0bf3d558e28ea03006eb29db78917daec5cfb6ec1046265 go1.22.0.linux-amd64.tar.gz" | sha256sum -c
-sudo tar -C /usr/local -xzf go1.22.0.linux-amd64.tar.gz
-rm go1.22.0.linux-amd64.tar.gz
+curl -LO https://golang.org/dl/go1.22.2.linux-amd64.tar.gz
+echo "5901c52b7a78002aeff14a21f93e0f064f74ce1360fce51c6ee68cd471216a17 go1.22.2.linux-amd64.tar.gz" | sha256sum -c
+sudo tar -C /usr/local -xzf go1.22.2.linux-amd64.tar.gz
+rm go1.22.2.linux-amd64.tar.gz
 echo >> .bash_profile
 echo 'export PATH=$PATH:/usr/local/go/bin' >> .bash_profile
 source ~/.bash_profile
@@ -87,10 +87,10 @@ On ARM64:
 
 ```bash
 sudo rm -rf /usr/local/go
-curl -LO https://golang.org/dl/go1.22.0.linux-arm64.tar.gz
-echo "6a63fef0e050146f275bf02a0896badfe77c11b6f05499bb647e7bd613a45a10 go1.22.0.linux-arm64.tar.gz" | sha256sum -c
-sudo tar -C /usr/local -xzf go1.22.0.linux-arm64.tar.gz
-rm go1.22.0.linux-arm64.tar.gz
+curl -LO https://golang.org/dl/go1.22.2.linux-arm64.tar.gz
+echo "36e720b2d564980c162a48c7e97da2e407dfcc4239e1e58d98082dfa2486a0c1 go1.22.2.linux-arm64.tar.gz" | sha256sum -c
+sudo tar -C /usr/local -xzf go1.22.2.linux-arm64.tar.gz
+rm go1.22.2.linux-arm64.tar.gz
 echo >> .bash_profile
 echo 'export PATH=$PATH:/usr/local/go/bin' >> .bash_profile
 source ~/.bash_profile

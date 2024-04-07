@@ -17,12 +17,13 @@ import (
 const (
 	serverRefID = 0x58535453
 
-	tssCap = 1 << 20
+	tssCap     = 1 << 20
+	tssItemCap = 8
 )
 
 type tssItem struct {
 	key string
-	buf [8]struct {
+	buf [tssItemCap]struct {
 		rxt, txt ntp.Time64
 	}
 	len  int

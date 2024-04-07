@@ -1,12 +1,14 @@
 package ntske
 
 import (
+	"context"
 	"crypto/tls"
+	"encoding/hex"
 	"errors"
+	"log/slog"
 	"net"
 
 	"github.com/quic-go/quic-go"
-	"go.uber.org/zap"
 
 	"example.com/scion-time/net/udp"
 )
@@ -18,7 +20,7 @@ var (
 
 // Fetcher is a client side NTS Cookie fetcher. It can be used for both TCP/TLS and SCION QUIC connections.
 type Fetcher struct {
-	Log       *zap.Logger
+	Log       *slog.Logger
 	TLSConfig tls.Config
 	Port      string
 	QUIC      struct {
@@ -30,7 +32,19 @@ type Fetcher struct {
 	data Data
 }
 
-func (f *Fetcher) exchangeKeys() error {
+func logData(ctx context.Context, log *slog.Logger, data Data) {
+	log.LogAttrs(ctx, slog.LevelDebug,
+		"NTS-KE data",
+		slog.String("c2s", hex.EncodeToString(data.C2sKey)),
+		slog.String("s2c", hex.EncodeToString(data.S2cKey)),
+		slog.String("server", data.Server),
+		slog.Uint64("port", uint64(data.Port)),
+		slog.Uint64("algo", uint64(data.Algo)),
+		slog.Any("cookies", data.Cookie),
+	)
+}
+
+func (f *Fetcher) exchangeKeys(ctx context.Context) error {
 	if f.QUIC.Enabled {
 		conn, _, err := dialQUIC(f.Log, f.QUIC.LocalAddr, f.QUIC.RemoteAddr, f.QUIC.DaemonAddr, &f.TLSConfig)
 		if err != nil {
@@ -39,11 +53,11 @@ func (f *Fetcher) exchangeKeys() error {
 		defer func() {
 			err := conn.CloseWithError(quic.ApplicationErrorCode(0), "" /* error string */)
 			if err != nil {
-				f.Log.Info("failed to close connection", zap.Error(err))
+				f.Log.LogAttrs(ctx, slog.LevelInfo, "failed to close connection", slog.Any("error", err))
 			}
 		}()
 
-		err = exchangeDataQUIC(f.Log, conn, &f.data)
+		err = exchangeDataQUIC(ctx, f.Log, conn, &f.data)
 		if err != nil {
 			return err
 		}
@@ -61,7 +75,7 @@ func (f *Fetcher) exchangeKeys() error {
 			return err
 		}
 
-		err = exchangeDataTLS(f.Log, conn, &f.data)
+		err = exchangeDataTLS(ctx, f.Log, conn, &f.data)
 		if err != nil {
 			return err
 		}
@@ -79,14 +93,14 @@ func (f *Fetcher) exchangeKeys() error {
 		return errUnknownAlgo
 	}
 
-	logData(f.Log, f.data)
+	logData(ctx, f.Log, f.data)
 	return nil
 }
 
 // FetchData returns either cached data or requests new Data by performing a NTS key exchange.
-func (f *Fetcher) FetchData() (Data, error) {
+func (f *Fetcher) FetchData(ctx context.Context) (Data, error) {
 	if len(f.data.Cookie) == 0 {
-		err := f.exchangeKeys()
+		err := f.exchangeKeys(ctx)
 		if err != nil {
 			return Data{}, err
 		}

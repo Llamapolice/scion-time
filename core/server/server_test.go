@@ -1,10 +1,11 @@
 package server_test
 
 import (
+	"log/slog"
 	"testing"
 	"time"
 
-	"go.uber.org/zap"
+	"example.com/scion-time/base/logbase"
 
 	"example.com/scion-time/core/server"
 	"example.com/scion-time/driver/clock"
@@ -14,7 +15,7 @@ import (
 
 func TestSimpleRequest(t *testing.T) {
 	server.LogTSS(t, "pre")
-	lclk := &clock.SystemClock{Log: zap.NewNop()}
+	lclk := &clock.SystemClock{Log: slog.New(logbase.NewNopHandler())}
 
 	cTxTime := lclk.Now()
 	ntpreq := ntp.Packet{}

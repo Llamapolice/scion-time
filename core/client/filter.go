@@ -3,7 +3,6 @@ package client
 import (
 	"example.com/scion-time/base/timebase"
 	"math"
-	"sync"
 	"time"
 
 	"go.uber.org/zap"
@@ -11,21 +10,16 @@ import (
 	"example.com/scion-time/base/timemath"
 )
 
-const (
-	maxNumRetries = 1
-)
-
-type filterContext struct {
+type filterState struct {
 	epoch          uint64
 	alo, amid, ahi float64
 	alolo, ahihi   float64
 	navg           float64
 }
 
-var (
-	filters   = make(map[string]filterContext)
-	filtersMu = sync.Mutex{}
-)
+type filter struct {
+	state map[string]filterState
+}
 
 func combine(lo, mid, hi time.Duration, trust float64) (offset time.Duration, weight float64) {
 	offset = mid
@@ -36,26 +30,27 @@ func combine(lo, mid, hi time.Duration, trust float64) (offset time.Duration, we
 	return
 }
 
-func filter(log *zap.Logger, reference string, lclk timebase.LocalClock, cTxTime, sRxTime, sTxTime, cRxTime time.Time) (
-	offset time.Duration, weight float64) {
+func (f *filter) do(log *zap.Logger, reference string, lclk timebase.LocalClock, cTxTime, sRxTime, sTxTime, cRxTime time.Time) (
+	offset time.Duration) {
 
 	// Based on Ntimed by Poul-Henning Kamp, https://github.com/bsdphk/Ntimed
 
-	filtersMu.Lock()
-	f := filters[reference]
+	var weight float64
+
+	fs := f.state[reference]
 
 	lo := timemath.Seconds(cTxTime.Sub(sRxTime))
 	hi := timemath.Seconds(cRxTime.Sub(sTxTime))
 	mid := (lo + hi) / 2
 
-	if f.epoch != lclk.Epoch() {
-		f.epoch = lclk.Epoch()
-		f.alo = 0.0
-		f.amid = 0.0
-		f.ahi = 0.0
-		f.alolo = 0.0
-		f.ahihi = 0.0
-		f.navg = 0.0
+	if fs.epoch != lclk.Epoch() {
+		fs.epoch = lclk.Epoch()
+		fs.alo = 0.0
+		fs.amid = 0.0
+		fs.ahi = 0.0
+		fs.alolo = 0.0
+		fs.ahihi = 0.0
+		fs.navg = 0.0
 	}
 
 	const (
@@ -63,47 +58,49 @@ func filter(log *zap.Logger, reference string, lclk timebase.LocalClock, cTxTime
 		filterThreshold = 3.0
 	)
 
-	if f.navg < filterAverage {
-		f.navg += 1.0
+	if fs.navg < filterAverage {
+		fs.navg += 1.0
 	}
 
 	var loNoise, hiNoise float64
-	if f.navg > 2.0 {
-		loNoise = math.Sqrt(f.alolo - f.alo*f.alo)
-		hiNoise = math.Sqrt(f.ahihi - f.ahi*f.ahi)
+	if fs.navg > 2.0 {
+		loNoise = math.Sqrt(fs.alolo - fs.alo*fs.alo)
+		hiNoise = math.Sqrt(fs.ahihi - fs.ahi*fs.ahi)
 	}
 
-	loLim := f.alo - loNoise*filterThreshold
-	hiLim := f.ahi + hiNoise*filterThreshold
+	loLim := fs.alo - loNoise*filterThreshold
+	hiLim := fs.ahi + hiNoise*filterThreshold
 
 	var branch int
 	failLo := lo < loLim
 	failHi := hi > hiLim
 	if failLo && failHi {
 		branch = 1
-	} else if f.navg > 3.0 && failLo {
-		mid = f.amid + (hi - f.ahi)
+	} else if fs.navg > 3.0 && failLo {
+		mid = fs.amid + (hi - fs.ahi)
 		branch = 2
-	} else if f.navg > 3.0 && failHi {
-		mid = f.amid + (lo - f.alo)
+	} else if fs.navg > 3.0 && failHi {
+		mid = fs.amid + (lo - fs.alo)
 		branch = 3
 	} else {
 		branch = 4
 	}
 
-	r := f.navg
-	if f.navg > 2.0 && branch != 4 {
+	r := fs.navg
+	if fs.navg > 2.0 && branch != 4 {
 		r *= r
 	}
 
-	f.alo += (lo - f.alo) / r
-	f.amid += (mid - f.amid) / r
-	f.ahi += (hi - f.ahi) / r
-	f.alolo += (lo*lo - f.alolo) / r
-	f.ahihi += (hi*hi - f.ahihi) / r
+	fs.alo += (lo - fs.alo) / r
+	fs.amid += (mid - fs.amid) / r
+	fs.ahi += (hi - fs.ahi) / r
+	fs.alolo += (lo*lo - fs.alolo) / r
+	fs.ahihi += (hi*hi - fs.ahihi) / r
 
-	filters[reference] = f
-	filtersMu.Unlock()
+	if f.state == nil {
+		f.state = make(map[string]filterState)
+	}
+	f.state[reference] = fs
 
 	trust := 1.0
 
@@ -116,11 +113,11 @@ func filter(log *zap.Logger, reference string, lclk timebase.LocalClock, cTxTime
 		zap.Float64("mid [s]", mid),
 		zap.Float64("hi [s]", hi),
 		zap.Float64("loLim [s]", loLim),
-		zap.Float64("amid [s]", f.amid),
+		zap.Float64("amid [s]", fs.amid),
 		zap.Float64("hiLim [s]", hiLim),
 		zap.Float64("offset [s]", timemath.Seconds(offset)),
 		zap.Float64("weight", weight),
 	)
 
-	return timemath.Inv(offset), weight
+	return timemath.Inv(offset)
 }

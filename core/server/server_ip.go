@@ -169,7 +169,7 @@ func runIPServer(
 			var cookies [][]byte
 			key := provider.Current()
 			addedCookie := false
-			for i := 0; i < len(ntsreq.Cookies)+len(ntsreq.CookiePlaceholders); i++ {
+			for range len(ntsreq.Cookies) + len(ntsreq.CookiePlaceholders) {
 				encryptedCookie, err := serverCookie.EncryptWithNonce(key.Value, key.ID)
 				if err != nil {
 					log.Info("failed to encrypt cookie", zap.Error(err))
@@ -233,7 +233,7 @@ func StartIPServer(
 		}
 		go runIPServer(log, mtrcs, lclk, lnet, conn, localHost.Zone, dscp, provider)
 	} else {
-		for i := ipServerNumGoroutine; i > 0; i-- {
+		for range ipServerNumGoroutine {
 			conn, err := lnet.ListenPacket("udp",
 				net.JoinHostPort(localHost.IP.String(), strconv.Itoa(localHost.Port)))
 			if err != nil {

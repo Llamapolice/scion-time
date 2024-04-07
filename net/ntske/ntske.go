@@ -24,12 +24,12 @@ package ntske
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"crypto/tls"
 	"encoding/binary"
 	"errors"
 	"fmt"
-
-	"go.uber.org/zap"
+	"log/slog"
 )
 
 // Data is the negotiated data from the NTS Key Exchange.
@@ -290,7 +290,7 @@ func ExportKeys(cs tls.ConnectionState, data *Data) error {
 	return nil
 }
 
-func ReadData(log *zap.Logger, reader *bufio.Reader, data *Data) error {
+func ReadData(ctx context.Context, log *slog.Logger, reader *bufio.Reader, data *Data) error {
 	var msg RecordHdr
 	var critical bool
 

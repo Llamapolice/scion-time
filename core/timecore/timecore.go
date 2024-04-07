@@ -7,9 +7,7 @@ import (
 	"example.com/scion-time/base/timebase"
 )
 
-var (
-	lclk atomic.Value
-)
+var lclk atomic.Value
 
 func RegisterClock(c timebase.LocalClock) {
 	if c == nil {

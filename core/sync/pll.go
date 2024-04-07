@@ -69,7 +69,7 @@ func (l *pll) Do(offset time.Duration, weight float64) {
 		if mdt < 0 {
 			panic("unexpected clock behavior")
 		}
-		dt := timemath.Seconds(now.Sub(l.t))
+		dt = timemath.Seconds(now.Sub(l.t))
 		if dt < 0.0 {
 			panic("unexpected clock behavior")
 		}

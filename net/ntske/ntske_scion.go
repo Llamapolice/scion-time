@@ -5,9 +5,8 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
+	"log/slog"
 	"net"
-
-	"go.uber.org/zap"
 
 	"github.com/scionproto/scion/pkg/daemon"
 	"github.com/scionproto/scion/pkg/snet"
@@ -18,7 +17,7 @@ import (
 	"example.com/scion-time/net/udp"
 )
 
-func dialQUIC(log *zap.Logger, localAddr, remoteAddr udp.UDPAddr, daemonAddr string, config *tls.Config) (*scion.QUICConnection, Data, error) {
+func dialQUIC(log *slog.Logger, localAddr, remoteAddr udp.UDPAddr, daemonAddr string, config *tls.Config) (*scion.QUICConnection, Data, error) {
 	config.NextProtos = []string{alpn}
 	var err error
 	ctx := context.Background()
@@ -35,18 +34,25 @@ func dialQUIC(log *zap.Logger, localAddr, remoteAddr udp.UDPAddr, daemonAddr str
 	} else {
 		ps, err = dc.Paths(ctx, remoteAddr.IA, localAddr.IA, daemon.PathReqFlags{Refresh: true})
 		if err != nil {
-			log.Error("failed to lookup paths", zap.Stringer("to", remoteAddr.IA), zap.Error(err))
+			log.LogAttrs(ctx, slog.LevelError,
+				"failed to lookup paths",
+				slog.Any("remote", remoteAddr),
+				slog.Any("error", err),
+			)
 			return nil, Data{}, err
 		}
 		if len(ps) == 0 {
-			log.Error("no paths available", zap.Stringer("to", remoteAddr.IA))
+			log.LogAttrs(ctx, slog.LevelError,
+				"no paths available",
+				slog.Any("remote", remoteAddr),
+			)
 			return nil, Data{}, errors.New("no paths available")
 		}
 	}
 
-	log.Debug("available paths", zap.Stringer("to", remoteAddr.IA), zap.Array("via", scion.PathArrayMarshaler{Paths: ps}))
+	log.LogAttrs(ctx, slog.LevelDebug, "available paths", slog.Any("remote", remoteAddr), slog.Any("via", ps))
 	sp := ps[0]
-	log.Debug("selected path", zap.Stringer("to", remoteAddr.IA), zap.Object("via", scion.PathMarshaler{Path: sp}))
+	log.LogAttrs(ctx, slog.LevelDebug, "selected path", slog.Any("remote", remoteAddr), slog.Any("via", sp))
 
 	conn, err := scion.DialQUIC(ctx, localAddr, remoteAddr, sp,
 		"" /* host*/, config, nil /* quicCfg */)
@@ -65,7 +71,7 @@ func dialQUIC(log *zap.Logger, localAddr, remoteAddr udp.UDPAddr, daemonAddr str
 	return conn, data, nil
 }
 
-func exchangeDataQUIC(log *zap.Logger, conn *scion.QUICConnection, data *Data) error {
+func exchangeDataQUIC(ctx context.Context, log *slog.Logger, conn *scion.QUICConnection, data *Data) error {
 	stream, err := conn.OpenStream()
 	if err != nil {
 		return err
@@ -96,7 +102,7 @@ func exchangeDataQUIC(log *zap.Logger, conn *scion.QUICConnection, data *Data) e
 	}
 
 	reader := bufio.NewReader(stream)
-	err = ReadData(log, reader, data)
+	err = ReadData(ctx, log, reader, data)
 	if err != nil {
 		return err
 	}

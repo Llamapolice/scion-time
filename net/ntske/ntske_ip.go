@@ -2,13 +2,13 @@ package ntske
 
 import (
 	"bufio"
+	"context"
 	"crypto/tls"
+	"log/slog"
 	"net"
 	"strconv"
 	"strings"
 	"time"
-
-	"go.uber.org/zap"
 
 	"example.com/scion-time/net/ntp"
 )
@@ -63,7 +63,7 @@ func dialTLS(hostport string, config *tls.Config) (*tls.Conn, Data, error) {
 	return conn, data, nil
 }
 
-func exchangeDataTLS(log *zap.Logger, conn *tls.Conn, data *Data) error {
+func exchangeDataTLS(ctx context.Context, log *slog.Logger, conn *tls.Conn, data *Data) error {
 	var msg ExchangeMsg
 
 	var nextproto NextProto
@@ -88,7 +88,7 @@ func exchangeDataTLS(log *zap.Logger, conn *tls.Conn, data *Data) error {
 	}
 
 	reader := bufio.NewReader(conn)
-	err = ReadData(log, reader, data)
+	err = ReadData(ctx, log, reader, data)
 	if err != nil {
 		return err
 	}

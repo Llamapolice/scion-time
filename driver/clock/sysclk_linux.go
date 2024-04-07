@@ -5,11 +5,12 @@ package clock
 // Based on Ntimed by Poul-Henning Kamp, https://github.com/bsdphk/Ntimed
 
 import (
+	"context"
+	"log/slog"
 	"math"
+	"os"
 	"sync"
 	"time"
-
-	"go.uber.org/zap"
 
 	"golang.org/x/sys/unix"
 
@@ -24,7 +25,7 @@ type adjustment struct {
 }
 
 type SystemClock struct {
-	Log        *zap.Logger
+	Log        *slog.Logger
 	mu         sync.Mutex
 	epoch      uint64
 	adjustment *adjustment
@@ -32,30 +33,35 @@ type SystemClock struct {
 
 var _ timebase.LocalClock = (*SystemClock)(nil)
 
-func now(log *zap.Logger) time.Time {
+func logFatal(log *slog.Logger, msg string, attrs ...slog.Attr) {
+	log.LogAttrs(context.Background(), slog.LevelError, msg, attrs...)
+	os.Exit(1)
+}
+
+func now(log *slog.Logger) time.Time {
 	var ts unix.Timespec
 	err := unix.ClockGettime(unix.CLOCK_REALTIME, &ts)
 	if err != nil {
-		log.Fatal("unix.ClockGettime failed", zap.Error(err))
+		logFatal(log, "unix.ClockGettime failed", slog.Any("error", err))
 	}
 	return time.Unix(ts.Unix()).UTC()
 }
 
-func sleep(log *zap.Logger, duration time.Duration) {
+func sleep(log *slog.Logger, duration time.Duration) {
 	fd, err := unix.TimerfdCreate(unix.CLOCK_REALTIME, unix.TFD_NONBLOCK)
 	if err != nil {
-		log.Fatal("unix.TimerfdCreate failed", zap.Error(err))
+		logFatal(log, "unix.TimerfdCreate failed", slog.Any("error", err))
 	}
 	ts, err := unix.TimeToTimespec(now(log).Add(duration))
 	if err != nil {
-		log.Fatal("unix.TimeToTimespec failed", zap.Error(err))
+		logFatal(log, "unix.TimeToTimespec failed", slog.Any("error", err))
 	}
 	err = unix.TimerfdSettime(fd, unix.TFD_TIMER_ABSTIME, &unix.ItimerSpec{Value: ts}, nil /* oldValue */)
 	if err != nil {
-		log.Fatal("unix.TimerfdSettime failed", zap.Error(err))
+		logFatal(log, "unix.TimerfdSettime failed", slog.Any("error", err))
 	}
 	if fd < math.MinInt32 || math.MaxInt32 < fd {
-		log.Fatal("unix.TimerfdCreate returned unexpected value")
+		logFatal(log, "unix.TimerfdCreate returned unexpected value")
 	}
 	pollFds := []unix.PollFd{
 		{Fd: int32(fd), Events: unix.POLLIN},
@@ -66,7 +72,7 @@ func sleep(log *zap.Logger, duration time.Duration) {
 			continue
 		}
 		if err != nil {
-			log.Fatal("unix.Poll failed", zap.Error(err))
+			logFatal(log, "unix.Poll failed", slog.Any("error", err))
 		}
 		break
 	}
@@ -87,20 +93,22 @@ func nsecToNsecTimeval(nsec int64) unix.Timeval {
 	}
 }
 
-func setTime(log *zap.Logger, offset time.Duration) {
-	log.Debug("setting time", zap.Duration("offset", offset))
+func setTime(log *slog.Logger, offset time.Duration) {
+	log.LogAttrs(context.Background(), slog.LevelDebug,
+		"setting time", slog.Duration("offset", offset))
 	tx := unix.Timex{
 		Modes: unix.ADJ_SETOFFSET | unix.ADJ_NANO,
 		Time:  nsecToNsecTimeval(offset.Nanoseconds()),
 	}
 	_, err := unix.ClockAdjtime(unix.CLOCK_REALTIME, &tx)
 	if err != nil {
-		log.Fatal("unix.ClockAdjtime failed", zap.Error(err))
+		logFatal(log, "unix.ClockAdjtime failed", slog.Any("error", err))
 	}
 }
 
-func setFrequency(log *zap.Logger, frequency float64) {
-	log.Debug("setting frequency", zap.Float64("frequency", frequency))
+func setFrequency(log *slog.Logger, frequency float64) {
+	log.LogAttrs(context.Background(), slog.LevelDebug,
+		"setting frequency", slog.Float64("frequency", frequency))
 	tx := unix.Timex{
 		Modes:  unix.ADJ_FREQUENCY,
 		Freq:   int64(math.Floor(frequency * 65536 * 1e6)),
@@ -108,7 +116,7 @@ func setFrequency(log *zap.Logger, frequency float64) {
 	}
 	_, err := unix.ClockAdjtime(unix.CLOCK_REALTIME, &tx)
 	if err != nil {
-		log.Fatal("unix.ClockAdjtime failed", zap.Error(err))
+		logFatal(log, "unix.ClockAdjtime failed", slog.Any("error", err))
 	}
 }
 
@@ -159,7 +167,7 @@ func (c *SystemClock) Adjust(offset, duration time.Duration, frequency float64) 
 		duration:  duration,
 		afterFreq: frequency,
 	}
-	go func(log *zap.Logger, adj *adjustment) {
+	go func(log *slog.Logger, adj *adjustment) {
 		sleep(log, adj.duration)
 		adj.clock.mu.Lock()
 		defer adj.clock.mu.Unlock()
@@ -170,7 +178,8 @@ func (c *SystemClock) Adjust(offset, duration time.Duration, frequency float64) 
 }
 
 func (c *SystemClock) Sleep(duration time.Duration) {
-	c.Log.Debug("sleeping", zap.Duration("duration", duration))
+	c.Log.LogAttrs(context.Background(), slog.LevelDebug,
+		"sleeping", slog.Duration("duration", duration))
 	if duration < 0 {
 		panic("invalid duration value")
 	}

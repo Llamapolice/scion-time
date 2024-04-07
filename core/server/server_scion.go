@@ -32,7 +32,7 @@ import (
 )
 
 const (
-	scionServerNumGoroutine = 1 // Changed for slimmer simulation
+	scionServerNumGoroutine = 1 // Changed for slimmer simulation TODO back to 8
 )
 
 type scionServerMetrics struct {
@@ -381,7 +381,7 @@ func runSCIONServer(
 				var cookies [][]byte
 				key := provider.Current()
 				addedCookie := false
-				for i := 0; i < len(ntsreq.Cookies)+len(ntsreq.CookiePlaceholders); i++ {
+				for range len(ntsreq.Cookies) + len(ntsreq.CookiePlaceholders) {
 					encryptedCookie, err := serverCookie.EncryptWithNonce(key.Value, key.ID)
 					if err != nil {
 						log.Info("failed to encrypt cookie", zap.Error(err))
@@ -518,7 +518,7 @@ func StartSCIONServer(
 		}
 		go runSCIONServer(ctx, log, mtrcs, lclk, lnet, conn, localHost.Zone, localHostPort, dscp, fetcher, provider)
 	} else {
-		for i := scionServerNumGoroutine; i > 0; i-- {
+		for range scionServerNumGoroutine {
 			fetcher := scion.NewFetcher(lnet.NewDaemonConnector(ctx, daemonAddr))
 			conn, err := lnet.ListenPacket("udp",
 				net.JoinHostPort(localHost.IP.String(), strconv.Itoa(localHost.Port)))

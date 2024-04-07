@@ -3,11 +3,13 @@ package main
 import (
 	"context"
 	"crypto/tls"
+	"log/slog"
 	"example.com/scion-time/driver/networking"
 	"net"
 	"os"
 	"testing"
 
+	"example.com/scion-time/base/zaplog"
 	"example.com/scion-time/core/client"
 	"example.com/scion-time/core/timecore"
 	"example.com/scion-time/driver/clock"
@@ -38,6 +40,7 @@ func TestTimeserviceNTSChrony(t *testing.T) {
 	}
 
 	ctx := context.Background()
+	log := slog.Default()
 
 	lclk := &clock.SystemClock{Log: log}
 	timecore.RegisterClock(lclk)
@@ -66,7 +69,7 @@ func TestTimeserviceNTSChrony(t *testing.T) {
 	c.Auth.NTSKEFetcher.Port = ntskePort
 	c.Auth.NTSKEFetcher.Log = log
 
-	_, _, err = client.MeasureClockOffsetIP(ctx, log, c, laddr, raddr)
+	_, _, err = client.MeasureClockOffsetIP(ctx, zaplog.Logger(), c, laddr, raddr)
 	if err != nil {
 		t.Fatalf("failed to measure clock offset %v", err)
 	}

@@ -2,7 +2,6 @@ package timemath
 
 import (
 	"math"
-	"sort"
 	"time"
 )
 
@@ -39,36 +38,4 @@ func Inv(d time.Duration) time.Duration {
 		panic("unexpected duration value (math.MinInt64)")
 	}
 	return -d
-}
-
-func Median(ds []time.Duration) time.Duration {
-	n := len(ds)
-	if n == 0 {
-		panic("unexpected number of duration values")
-	}
-	sort.Slice(ds, func(i, j int) bool {
-		return ds[i] < ds[j]
-	})
-	var m time.Duration
-	i := n / 2
-	if n%2 != 0 {
-		m = ds[i]
-	} else {
-		m = ds[i-1] + (ds[i]-ds[i-1])/2
-	}
-	return m
-}
-
-func FaultTolerantMidpoint(ds []time.Duration) time.Duration {
-	n := len(ds)
-	if n == 0 {
-		panic("unexpected number of duration values")
-	}
-	sort.Slice(ds, func(i, j int) bool {
-		return ds[i] < ds[j]
-	})
-	var m time.Duration
-	f := (n - 1) / 3
-	m = ds[f] + (ds[n-1-f]-ds[f])/2
-	return m
 }
